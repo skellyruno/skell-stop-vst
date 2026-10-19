@@ -1,9 +1,9 @@
-name: Build Windows VST3
+name: Build StopDial
 on:
   workflow_dispatch:
 
 jobs:
-  build:
+  windows:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -11,14 +11,17 @@ jobs:
         run: cmake -S . -B build -A x64
       - name: Build
         run: cmake --build build --config Release --parallel 2
-      - name: Package
+      - name: Package VST3 and Standalone
         shell: pwsh
         run: |
-          $plugin = Get-ChildItem -Path build -Directory -Recurse -Filter '*.vst3' | Select-Object -First 1
-          if (-not $plugin) { throw 'VST3 bundle missing' }
-          Compress-Archive -Path $plugin.FullName -DestinationPath SkellPlugin-Windows-VST3.zip
+          $vst = Get-ChildItem build -Recurse -Directory -Filter "StopDial.vst3" | Select-Object -First 1
+          if (-not $vst) { throw "StopDial.vst3 bundle not found" }
+          $standalone = Get-ChildItem build -Recurse -File -Filter "StopDial.exe" | Select-Object -First 1
+          New-Item -ItemType Directory -Path package | Out-Null
+          Copy-Item -Recurse $vst.FullName package/
+          if ($standalone) { Copy-Item $standalone.FullName package/ }
+          Compress-Archive package/* StopDial-Windows.zip
       - uses: actions/upload-artifact@v4
         with:
-          name: SkellPlugin-Windows-VST3
-          path: SkellPlugin-Windows-VST3.zip
-          if-no-files-found: error
+          name: StopDial-Windows
+          path: StopDial-Windows.zip
