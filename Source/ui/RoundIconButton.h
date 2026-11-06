@@ -2,7 +2,7 @@
 #include "../PluginProcessor.h"
 #include "Theme.h"
 
-class RoundIconButton final : public juce::Component
+class RoundIconButton final : public juce::Component, public juce::SettableTooltipClient
 {
 public:
     enum class Kind { curve, stop };

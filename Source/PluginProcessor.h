@@ -1,5 +1,6 @@
 #pragma once
 #include <JuceHeader.h>
+#include "dsp/StopDialMath.h"
 #include <array>
 #include <atomic>
 #include <vector>
@@ -11,6 +12,12 @@ class WavePeakFifo final
 {
 public:
     static constexpr uint32_t capacity = 4096;
+    void reset() noexcept
+    {
+        // Call only while the audio callback is stopped (prepareToPlay).
+        read.store(0, std::memory_order_relaxed);
+        write.store(0, std::memory_order_relaxed);
+    }
     void push(WavePeak value) noexcept
     {
         auto w = write.load(std::memory_order_relaxed);
@@ -64,21 +71,37 @@ public:
     std::atomic<float> loopStart { 0.25f }, loopEnd { 0.75f };
     void setLoopMarkers(float start, float end) noexcept;
     void requestStopFromUI() noexcept { pendingUIStop.store(true, std::memory_order_release); }
+    void requestResumeFromUI() noexcept { pendingUIResume.store(true, std::memory_order_release); }
+    // Read-only GUI telemetry; audio thread is the sole writer.
+    enum DisplayState { live = 0, braking, stopped, holding, looping };
+    std::atomic<int> displayState { live };
     static juce::AudioProcessorValueTreeState::ParameterLayout createLayout();
     static const juce::StringArray& syncNames();
     static const juce::StringArray& loopNames();
 
 private:
-    enum class EngineState { passThrough, slowing, halted } state = EngineState::passThrough;
-    juce::AudioBuffer<float> history;
+    enum class EngineState { passThrough, slowing, halted, lockedRun } state = EngineState::passThrough;
+    juce::AudioBuffer<float> history; // Always-live circular input history
+    juce::AudioBuffer<float> loopClip; // Frozen copy made incrementally after the stop
     int historySize = 0, writeHead = 0;
     double sampleRateHz = 44100.0, readHead = 0.0;
     int64_t stopSample = 0, stopDuration = 1;
+    double stopPhase = 0.0, latchedStopBeats = 1.0;
+    double loopCursor = 0.0, capturedBeatSeconds = 0.5;
+    int clipCopied = 0, clipToCopy = 0;
+    bool clipReady = false;
+    float lastOutput[2] { 0.0f, 0.0f };
+    float transitionFrom[2] { 0.0f, 0.0f };
+    int transitionRemaining = 0, transitionLength = 1;
+    double tapeLag = 0.0;
+    int safetyReleaseRemaining = 0, safetyReleaseLength = 1;
+    int lastMode = 2;
     double currentBeatSeconds = 0.5, heldLoopStart = 0.0;
     int heldLoopSize = 1;
-    bool oldTrigger = false;
-    std::atomic<bool> pendingUIStop { false };
-    float lowpass[2] { 0.0f, 0.0f };
+    bool oldTrigger = false, oldResume = false;
+    std::atomic<bool> pendingUIStop { false }, pendingUIResume { false };
+    std::array<StopDialMath::ModernTone, 2> modernTone;
+    float dcPole = 0.998f;
     int peakCount = 0, peakSamples = 128;
     float peakMin = 0.0f, peakMax = 0.0f;
     juce::SmoothedValue<float, juce::ValueSmoothingTypes::Linear>
@@ -91,5 +114,10 @@ private:
     void beginStop(double bpm, int syncIndex) noexcept;
     void updateBeat(double bpm) noexcept;
     float renderLoop(int channel, double loopPhase) const noexcept;
+    float interpolateClip(int channel, double position) const noexcept;
+    float interpolateLiveLoop(int channel, double position) const noexcept;
+    void copyClipStep() noexcept;
+    void finishStop(int mode, int loopDiv) noexcept;
+    void startTransition() noexcept;
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(StopDialAudioProcessor)
 };

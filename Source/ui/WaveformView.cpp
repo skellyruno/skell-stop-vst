@@ -5,6 +5,9 @@ WaveformView::WaveformView(StopDialAudioProcessor& p) : processor(p)
 {
     setOpaque(false);
     setMouseCursor(juce::MouseCursor::NormalCursor);
+    // Discard stale backlog accumulated while the editor was closed.
+    WavePeak stale;
+    while (processor.peaks.pop(stale)) {}
     startTimerHz(60);
 }
 
@@ -18,6 +21,12 @@ void WaveformView::timerCallback()
         snapshot[writeColumn] = next;
         writeColumn = (writeColumn + 1) % columns;
         liveInput = true;
+        dirty = true;
+    }
+    const float position = processor.transportProgress.load(std::memory_order_relaxed);
+    if (std::abs(position - playheadPosition) > 0.005f)
+    {
+        playheadPosition = position;
         dirty = true;
     }
     if (dirty) repaint();
@@ -82,14 +91,43 @@ void WaveformView::paint(juce::Graphics& g)
     g.setColour(Theme::green.withAlpha(0.16f));
     g.fillRect(start, yMid - range, end - start, 2.0f * range);
 
+    // A thin animated playhead shows which part of the brake/loop is audible.
+    const int status = processor.displayState.load(std::memory_order_relaxed);
+    if (status != StopDialAudioProcessor::live)
+    {
+        const float x = 12.0f + playheadPosition * (baseW - 24.0f);
+        g.setColour(Theme::orange.withAlpha(0.14f));
+        g.fillRect(x - 3.0f, yMid - range, 6.0f, range * 2.0f);
+        g.setColour(Theme::orange.withAlpha(0.85f));
+        g.drawVerticalLine(juce::roundToInt(x), yMid - range, yMid + range);
+    }
+
+    int handleIndex = 0;
     for (float marker : { start, end })
     {
-        g.setColour(Theme::green.withAlpha(0.68f));
+        const bool highlighted = handleIndex++ == hoverHandle;
+        g.setColour(Theme::green.withAlpha(highlighted ? 0.92f : 0.68f));
         g.drawRoundedRectangle(marker - 4.0f, yMid - range, 8.0f, range * 2.0f,
-                               5.0f, 1.5f);
+                               5.0f, highlighted ? 2.1f : 1.5f);
         g.setColour(Theme::green.withAlpha(0.35f));
         g.drawVerticalLine(static_cast<int>(marker), yMid - range, yMid + range);
+        // Tiny vector handle affords dragging even against the grey waveform.
+        g.setColour(Theme::green.withAlpha(highlighted ? 1.0f : 0.8f));
+        g.fillRoundedRectangle(marker - 7.0f, yMid - range - 4.0f,
+                               14.0f, 8.0f, 3.5f);
     }
+}
+
+bool WaveformView::hitTest(int x, int y)
+{
+    // Only the two handles intercept clicks. The lower half-moon lock and
+    // number are painted in a sibling component and must remain clickable.
+    const float bx = x * baseW / std::max(1, getWidth());
+    const float by = y * baseH / std::max(1, getHeight());
+    if (by < 35.0f || by > 252.0f) return false;
+    const float start = 12.0f + processor.loopStart.load() * (baseW - 24.0f);
+    const float end = 12.0f + processor.loopEnd.load() * (baseW - 24.0f);
+    return std::min(std::abs(bx - start), std::abs(bx - end)) < 23.0f;
 }
 
 void WaveformView::mouseMove(const juce::MouseEvent& e)
@@ -97,11 +135,16 @@ void WaveformView::mouseMove(const juce::MouseEvent& e)
     const float x = e.position.x * baseW / std::max(1, getWidth());
     const float a = 12.0f + processor.loopStart.load() * (baseW - 24.0f);
     const float b = 12.0f + processor.loopEnd.load() * (baseW - 24.0f);
-    setMouseCursor(std::min(std::abs(x - a), std::abs(x - b)) < 13.0f
-        ? juce::MouseCursor::LeftRightResizeCursor : juce::MouseCursor::NormalCursor);
+    const float da = std::abs(x - a), db = std::abs(x - b);
+    const int newHandle = std::min(da, db) < 23.0f ? (da <= db ? 0 : 1) : -1;
+    if (newHandle != hoverHandle) { hoverHandle = newHandle; repaint(); }
+    setMouseCursor(newHandle >= 0 ? juce::MouseCursor::LeftRightResizeCursor
+                                  : juce::MouseCursor::NormalCursor);
 }
 void WaveformView::mouseExit(const juce::MouseEvent&)
 {
+    hoverHandle = -1;
+    repaint();
     setMouseCursor(juce::MouseCursor::NormalCursor);
 }
 void WaveformView::mouseDown(const juce::MouseEvent& e)
@@ -123,3 +166,8 @@ void WaveformView::mouseDrag(const juce::MouseEvent& e)
     repaint();
 }
 void WaveformView::mouseUp(const juce::MouseEvent&) { selectedMarker = -1; }
+void WaveformView::mouseDoubleClick(const juce::MouseEvent&)
+{
+    processor.setLoopMarkers(0.25f, 0.75f);
+    repaint();
+}

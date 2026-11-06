@@ -3,7 +3,7 @@
 #include "WaveformView.h"
 #include "Theme.h"
 
-class DialComponent final : public juce::Component, private juce::Timer
+class DialComponent final : public juce::Component, public juce::SettableTooltipClient, private juce::Timer
 {
 public:
     explicit DialComponent(StopDialAudioProcessor&);

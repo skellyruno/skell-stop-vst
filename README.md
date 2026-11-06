@@ -1,93 +1,253 @@
-# StopDial — JUCE VST3 + Standalone
+# StopDial v2.0 — JUCE VST3 + Standalone
 
-Original, vector-only tape-stop/tempo-loop audio effect. Developed from the uploaded
-Skell quickstart build template, not dependent on any third-party UI assets or marks.
+StopDial is a vector-drawn stereo/mono tape-stop and rhythmic looping effect.
+The plugin uses original Skell Audio branding, a 725 × 892 fixed-aspect-ratio
+interface, and stable original APVTS parameter IDs for compatibility with
+existing DAW sessions. Version 2.0 adds one automatable `resumeTrigger` bool
+without renaming or removing existing parameters.
 
-## Build locally
+## Build
 
-Requires CMake 3.22+, a C++17 compiler, JUCE 7 or later, and VST3 build dependencies.
-By default CMake downloads JUCE 8.0.12, so a network connection is needed during
-first configuration; alternatively use `-DJUCE_PATH=...`.
+- **JUCE:** 7+ compatible design; CMake currently fetches JUCE **8.0.12** if
+  `JUCE_PATH` is not set. The machine configuring CMake needs Git/network
+  access to fetch JUCE, or a local JUCE checkout.
+- **Windows:** MSVC via Visual Studio 2022/2026 (x64), CMake 3.22+, Windows SDK.
+- **macOS:** Xcode/Clang, CMake 3.22+.
 
-### Windows — Visual Studio 2022/2026, MSVC x64
+Windows PowerShell:
 
 ```powershell
 cmake -S . -B build -A x64 -DJUCE_PATH="C:/JUCE"
 cmake --build build --config Release --parallel 2
+ctest --test-dir build -C Release --output-on-failure
 ```
 
-### macOS — Xcode/Clang
+macOS:
 
-```bash
+```sh
 cmake -S . -B build -G Xcode -DJUCE_PATH="$HOME/JUCE"
 cmake --build build --config Release --parallel 3
+ctest --test-dir build -C Release --output-on-failure
 ```
 
-Typical outputs (JUCE 7/8 convention):
+If JUCE is not local, omit `-DJUCE_PATH=...` and configure with network access.
+The GitHub Actions workflow produces Windows and macOS artifacts and runs the
+native C++ regression tests after compilation.
 
-- Windows: `build/StopDial_artefacts/Release/VST3/StopDial.vst3` and
-  `build/StopDial_artefacts/Release/Standalone/StopDial.exe`.
-- macOS: `build/StopDial_artefacts/Release/VST3/StopDial.vst3` and
-  `build/StopDial_artefacts/Release/Standalone/StopDial.app`.
+Usual outputs:
 
-The exact location can vary by generator. Search the build folder for `StopDial.vst3`.
-Copy `.vst3` to the usual VST3 location, e.g. `C:\Program Files\Common Files\VST3`
-or `~/Library/Audio/Plug-Ins/VST3` on macOS. The standalone build is useful
-for testing without a DAW. A disconnected build host should set `JUCE_PATH`.
+| Platform | VST3 | Standalone |
+| --- | --- | --- |
+| Windows | `build/StopDial_artefacts/Release/VST3/StopDial.vst3` | `build/StopDial_artefacts/Release/Standalone/StopDial.exe` |
+| macOS | `build/StopDial_artefacts/Release/VST3/StopDial.vst3` | `build/StopDial_artefacts/Release/Standalone/StopDial.app` |
 
-## Automated builds from GitHub
+The location can differ across JUCE generators; search `build` for `StopDial.vst3`.
+Copy the VST3 bundle to `C:\Program Files\Common Files\VST3` on Windows,
+or `~/Library/Audio/Plug-Ins/VST3` on macOS.
 
-Upload everything in this folder to a GitHub repo and run **Actions → Build StopDial**.
-Both Windows and macOS workflows compile VST3 and standalone and upload ZIP artifacts.
+## Controls
 
-## How it works
+- **New live-status strip:** LIVE INPUT / BRAKING / STOPPED / SPEED HOLD /
+  LOOPING, the host BPM, and a **RESUME** control to return immediately to
+  normal live playback. The new `resumeTrigger` parameter can also be automated.
+  UI clicks use an audio-thread event latch so short clicks are not lost.
+- **Green ring — stopAmount:** effect wet depth 0–100%; drag the arc, double-click
+  to reset. Shift-drag and Shift-wheel for fine adjustment.
+- **Curve button — curve:** acceleration/braking shape, -100 to +100.
+- **Stop square — stopTrigger:** a momentary APVTS bool, plus a UI-only event
+  latch that catches quick mouse taps occurring between audio callbacks.
+- **Division label — syncDiv:** quarter-note subdivisions and dotted values;
+  changing tempo while stopping changes the rate of phase advance, preserving
+  the musical position. Division selection itself is latched at trigger.
+- **Mode:** Classic (tape speed), Modern (tape speed with low-pass / saturation),
+  or Loop (repeat a captured slice after braking).
+- **Loop label — loopDiv:** 1/4, 1/8, dotted durations, and others.
+- **Four green bars — loopPattern:** click any individual bar to toggle its
+  corresponding beat; each change is automatable through the existing
+  four-bit rhythm mask (0–15). Pattern 15 plays without rhythmic gain dips.
+- **Padlock / percentage — lock and lockAmount:** toggles a non-zero final
+  speed and adjusts that speed as a percentage. Drag the percentage to edit.
+- **Waveform green handles:** drag either edge of the selected slice; the
+  waveform now highlights handles on hover and shows a moving orange tape/loop
+  playhead. Double-click a handle to restore the original marker positions.
+  Marker edits apply at the **next loop capture**, not to an already playing
+  frozen slice, and are saved to the project state.
 
-- **Main ring:** effect depth (0–100%). Clicking/draging its outside arc changes depth,
-  wheel edits it, shift is fine-adjust, double-click resets to 100%.
-- **Curve:** changes when braking becomes strong; negative curves wait longer to brake.
-- **Stop button:** momentary trigger. Tap the square to start a full time-stop;
-  holding is not required. Clicking the `1/4` label opens tempo division choices.
-- **Classic:** interpolated variable-speed playback.
-- **Modern:** same brake with interpolated lowpass cutoff sweep and soft saturation.
-- **Loop:** after the brake, freezes an input slice and keeps looping it.
-  Loop length is set by the `1/8.` label; the four bars select one of 16 rhythmic
-  gate patterns. Marker positions constrain how much of the selected slice loops.
-- **Lock icon:** toggles brake lock. When on, `lockAmount` sets the lowest speed during
-  braking; when off the brake naturally reaches speed zero. Drag the percentage vertically.
-- **Waveform:** 60 Hz peak view from a lock-free single-producer/single-consumer FIFO.
-  The two markers are draggable and persist in saved state.
+## Engine details
 
-### Engineering notes
+1. A 16-second per-channel, continuously updated history buffer keeps
+   **fresh** audio available even when a frozen loop has been playing for a long
+   time. Recording happens in `processBlock`; buffers are allocated in
+   `prepareToPlay` only.
+2. Variable-speed playback uses a shared stereo read cursor with bounded
+   four-point Hermite interpolation: cubic transients cannot overshoot the
+   four source taps. The read cursor now starts a safe four frames behind the
+   next write position so it cannot sample unwritten future taps. The slowdown
+   duration is measured in beats with a block-rate update of host BPM so tempo
+   changes preserve brake phase.
+3. When the stop enters Loop mode, its source range is preserved using an
+   independently allocated snapshot. At most **8 stereo frames** are copied
+   per processed audio frame, spreading the copy over time instead of invoking
+   a single long operation on the realtime thread. The capture range is from
+   the always-live ring. The frozen clip then loops indefinitely, independent
+   of the live recording buffer.
+4. Loop-splice overlap uses smooth **linear** crossfade weights (which sum to
+   unity). This avoids equal-power boosts of nearly correlated samples. Gate
+   patterns only fade where adjacent steps differ. During Loop mode, subsequent
+   BPM changes adjust playback rate and loop transport progress.
+5. Retriggers, stop entry, resume, and mode changes use a short output
+   crossfade. Classic and Modern fade to quiet at stop completion; Loop uses
+   only the stop-to-loop handoff and **does not fade to zero first**. This
+   removes a 12 ms double-fade dip from the older implementation. There is
+   still no guarantee of click-free audio for arbitrary transient material.
+6. With Lock enabled, the slowdown continues at the locked minimum speed.
+   Because the live buffer is finite, a **50 ms automatic safety release to
+   dry input** occurs just before its read material would be overwritten. The
+   Lock toggle stays armed for the next trigger. To sustain an indefinite
+   repetition, use Loop mode instead.
+7. Lock-free SPSC peak FIFO drives the waveform, and an editor re-open flushes
+   stale peaks rather than drawing seconds-old audio. The audio reset no
+   longer resets FIFO counters while an open editor might still be consuming,
+   avoiding an avoidable data race on sample-rate reconfiguration.
+8. **Modern** now blends in two cascaded low-pass stages as the stop slows,
+   uses speed-dependent, gain-compensated soft saturation, and includes a DC
+   blocker. Its processing state is primed on retrigger and the same filter
+   implementation is used by the native C++ stability tests.
+9. When fully **LIVE**, the audio callback takes a lightweight dry-through
+   path: no tape interpolation, exponential coefficients, waveshaping or phase
+   math, while preserving live ring capture and waveform metering.
 
-The circular history stores ~8 s of audio per stereo channel and is allocated only
-in `prepareToPlay`. A trigger begins reading recent input with 4-point Hermite
-interpolation; continuous input capture proceeds during braking. At the stop point,
-input recording freezes so loop playback remains stable indefinitely. The effect uses
-true wet/dry mixing; depth 100% produces full stop, while depth 0% is bypass.
-The host tempo is retrieved from AudioPlayHead with a 120 BPM fallback. Reported host
-latency is **0 samples**, as there is no lookahead; intentional time stretching and
-modulation are not latency compensation. The first wet samples use the latest history,
-so the dry/wet crossfade guards the onset.
+The host-reported latency is **zero samples** (no look-ahead and no reported
+DSP delay). The intentional variable-speed wet read starts with a few frames
+of recent recorded audio. Tape braking is
+an intentional playback effect, not a conventional delay. Source history is
+limited to 16 seconds; a captured loop is limited to 9 seconds at 20 BPM.
+The infinite looping may require the host to continue processing after source
+input ends; hosts differ in how they interpret a plugin's zero tail report.
+There is no production preset browser or embedded font.
 
-**Limits:** The input history is fixed to 8 s; extremely long musical divisions at
-low tempos are not guaranteed to retain all material. Zero-latency tape-stop cannot
-play *future* incoming audio; audio is captured while braking. A hard retrigger starts
-from the current buffer position. Pattern gate playback is a creative rhythmic effect,
-not a phase-locked reconstruction of a whole DAW measure. There is no preset browser,
-only a parameter reset and about popup. Font typography uses the host's system sans,
-not an embedded third-party font; all marks and shapes are drawn with JUCE paths.
+## Verification
 
-## Testing guidance
+Run the separate dependency-free C++ tests even before JUCE is installed:
 
-1. In standalone, run a vocal or sustained-note input and tap Stop.
-2. Compare `Classic`, `Modern` and `Loop` at 120 BPM and 90 BPM.
-3. Automate stopAmount, curve, and syncDiv in a DAW, then save/reopen the project.
-4. Check the Standalone and VST3 plugin at 44.1, 48, 96 kHz, mono/stereo, and
-   block sizes 32/128/512/2048 samples.
-5. Verify no audio allocations or locks in the audio callback; inspect with an
-   RT-safety profiler in the target host.
+```sh
+clang++ -std=c++17 -Wall -Wextra -Werror -O2 \
+  tests/stopdial_math_tests.cpp -o StopDialDSPTests
+./StopDialDSPTests
+python3 tests/check_math.py
+```
 
-**Verification:** Source generated and statically checked in the authoring environment.
-There was no JUCE installation or GitHub network access available, so a full compile
-and DAW runtime test could not be performed here. Use the CI workflow or local JUCE
-checkout to confirm compilation.
+With Clang address and undefined-behavior sanitizers:
+
+```sh
+clang++ -std=c++17 -Wall -Wextra -Werror -O1 \
+  -fsanitize=address,undefined -fno-omit-frame-pointer \
+  tests/stopdial_math_tests.cpp -o StopDialDSPTests
+./StopDialDSPTests
+```
+
+These checks cover the C++ maths for curves, causal tape indexing,
+transient-bounded Hermite interpolation, the **same Modern filter code used
+by the plugin**, loop crossfades, rhythm masks, tempo timing, wrapped Hermite
+guards, minimum-slice bounds, in-block loop period changes, and bounded
+incremental snapshots. C++ assertions remain active in Release (`-DNDEBUG`) builds.
+They are **not** proof that the JUCE plugin compiles, nor do they replace audio
+rendering in FL Studio, Ableton, or Reaper.
+
+### Quick offline CMake tests (no JUCE SDK required)
+
+```sh
+cmake -S . -B build-math -DSTOPDIAL_MATH_ONLY=ON
+cmake --build build-math --parallel
+ctest --test-dir build-math --output-on-failure
+```
+
+On Linux, add `-DSTOPDIAL_ENABLE_SANITIZERS=ON` for AddressSanitizer
+and UndefinedBehaviorSanitizer. A dedicated Linux CI job now runs these tests
+before Windows/macOS plugin builds.
+
+### Manual DAW tests still required
+
+- Windows MSVC build, VST3 load and unload, project save/reopen.
+- Silent / sine / transient / full-mix recordings at 44.1, 48, 96 kHz;
+  mono and stereo; block sizes 32/128/512/2048.
+- Fast stop-trigger taps, DAW automation, bypass, repeated retriggers, and
+  mode switching while output is audible.
+- BPM changes during both slowing and looping; low BPM and dotted divisions.
+- Long (>20s) loop playback and repeated retriggers from currently playing
+  material; Lock safety release with long slowdowns.
+- Reported latency, offline bounce tails, CPU profile and memory at 192 kHz.
+
+**Validation for v2.0:** native math/DSP tests passed using GCC -O2 with
+`-DNDEBUG`, Clang -O1 with ASan and UBSan, and CMake's standalone DSP-only
+CTest configuration. Python timing/bounds checks also passed. These are
+real tests of the dependency-free helpers, **not a full plugin or listening
+validation**. JUCE was not installed in this environment and external DNS
+could not fetch it; full JUCE compilation, FL Studio loading and audio-render
+quality remain unverified.
+
+## What changed in v2.0 (versus v1.3)
+
+- **Live/resume control:** new vector status strip displays effect state, BPM
+  and a clickable return-to-live action. New automatable `resumeTrigger` bool
+  retains existing ID/state mappings for every original parameter.
+- **Modern DSP:** shared, tested two-stage low-pass, stronger speed-dependent
+  warmth, level-compensated saturation, DC removal, and cleared stale tone
+  history at retrigger.
+- **Cubic safety:** causal, four-frame tape-read margin and Hermite output
+  bounded to source extrema around transients.
+- **Stop/loop continuity:** no unnecessary fade-to-zero directly before the
+  handoff crossfade when Loop mode takes over.
+- **CPU:** minimal-cost live pass-through path with continuous recording and
+  waveform metering; avoids unnecessary filter calculations in Classic/Loop.
+- **GUI:** editable individual rhythm bars, waveform playhead and clearer
+  drag handles, improved hover/cursor feedback, tooltips, and corrected
+  screenshot-style charcoal header contrast.
+- **Validation:** a Linux sanitizer CI job and offline `STOPDIAL_MATH_ONLY`
+  CMake mode with regressions for the new DSP logic.
+
+### Known limits
+
+The current loop marker positions are saved but are **not additional
+DAW-automatable parameters**. Moving them prepares the *next* loop capture;
+it does not recut a frozen clip already playing. The zero reported tail may
+cause some hosts to suspend infinite loop playback after input ends. Infinite
+Lock playback is deliberately not offered with a finite history buffer; its
+safety fallback resumes dry signal. Host-specific CPU/GUI performance and
+listening quality have not been measured. The interface uses the operating
+system's sans-serif font (no bundled font assets).
+
+## What changed in v1.3 (versus v1.2)
+
+- **Stop-to-loop handoff:** transitions from the slowing tape read head to a
+  captured loop through a 6 ms continuity crossfade instead of hard switching.
+  Removed the extra loop-entry fade that could create an audible gain dip.
+- **Hermite loop boundaries:** snapshot guards now wrap within the selected
+  loop instead of reading surrounding live audio; provisional live reads use
+  the same periodic indexing, avoiding a phase jump when copying completes.
+- **Very short loop regions:** constrained the minimum 16-frame slice to
+  already captured history, even when the markers are near the write head.
+- **Mid-block stop completion:** updates loop length immediately within the
+  same process block, rather than running the newly captured loop through the
+  previous clip's duration until the next host block.
+- **Invalid audio protection:** replaces non-finite upstream samples with
+  silence before storing them in the circular buffer / Modern filter path.
+- **Stronger test integrity:** Release builds now execute assertions; added
+  periodic-guard, short-slice, crossfade and in-block loop-period tests.
+
+All original APVTS parameter IDs and editor state keys were preserved.
+The optional `resumeTrigger` parameter was added in v2.0. No bitmap dependency.
+
+## What changed in v1.2 (versus v1.1)
+
+- Tempo-following stop progress instead of a fixed sample duration at the
+  moment of trigger; tempo-dependent Loop playback after capture.
+- A continuously recording history and incrementally copied frozen loop,
+  allowing retriggers from recent incoming audio after a long held loop.
+- Correct unity gain in fully active loop-pattern mode and a DC-safe smooth
+  splice at the repeat boundary.
+- Short crossfades on retriggers and mode changes; physical minimum-speed Lock
+  continuation and a bounded-buffer safety release.
+- Corrected WaveformView hit testing so it no longer intercepts padlock/amount
+  control clicks; cleaned stale peak FIFO on editor opening.
+- CMake CTest target for standalone C++ DSP math tests, and CI test steps.

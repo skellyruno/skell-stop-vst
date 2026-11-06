@@ -1,5 +1,20 @@
 cmake_minimum_required(VERSION 3.22)
-project(StopDial VERSION 1.0.0 LANGUAGES C CXX)
+project(StopDial VERSION 2.0.0 LANGUAGES C CXX)
+
+# Dependency-free, fast DSP regression build for machines without the JUCE SDK.
+option(STOPDIAL_MATH_ONLY "Build native DSP tests without fetching JUCE" OFF)
+option(STOPDIAL_ENABLE_SANITIZERS "Enable ASan/UBSan on native DSP tests (Linux)" OFF)
+if(STOPDIAL_MATH_ONLY)
+    enable_testing()
+    add_executable(StopDialDSPTests tests/stopdial_math_tests.cpp)
+    target_compile_features(StopDialDSPTests PRIVATE cxx_std_17)
+    if(STOPDIAL_ENABLE_SANITIZERS AND CMAKE_SYSTEM_NAME STREQUAL "Linux")
+        target_compile_options(StopDialDSPTests PRIVATE -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer)
+        target_link_options(StopDialDSPTests PRIVATE -fsanitize=address,undefined)
+    endif()
+    add_test(NAME StopDialDSPTests COMMAND StopDialDSPTests)
+    return()
+endif()
 
 include(FetchContent)
 if(DEFINED JUCE_PATH AND EXISTS "${JUCE_PATH}/CMakeLists.txt")
@@ -14,7 +29,7 @@ endif()
 
 juce_add_plugin(StopDial
     COMPANY_NAME "Skell Audio"
-    COMPANY_WEBSITE "https://example.invalid/stopdial"
+    COMPANY_WEBSITE "https://skellyr.uno"
     BUNDLE_ID "audio.skell.stopdial"
     PLUGIN_MANUFACTURER_CODE SkAu
     PLUGIN_CODE Sd01
@@ -32,12 +47,14 @@ juce_generate_juce_header(StopDial)
 
 target_sources(StopDial PRIVATE
     Source/PluginProcessor.h Source/PluginProcessor.cpp
+    Source/dsp/StopDialMath.h
     Source/PluginEditor.h Source/PluginEditor.cpp
     Source/ui/Theme.h
     Source/ui/DialComponent.h Source/ui/DialComponent.cpp
     Source/ui/WaveformView.h Source/ui/WaveformView.cpp
     Source/ui/RoundIconButton.h Source/ui/RoundIconButton.cpp
     Source/ui/ModePills.h Source/ui/ModePills.cpp
+    Source/ui/StatusStrip.h Source/ui/StatusStrip.cpp
     Source/ui/LookAndFeel.h Source/ui/LookAndFeel.cpp)
 
 target_compile_features(StopDial PRIVATE cxx_std_17)
@@ -50,8 +67,10 @@ target_link_libraries(StopDial PRIVATE
     juce::juce_recommended_config_flags
     juce::juce_recommended_warning_flags)
 
-option(STOPDIAL_BUILD_TESTS "Build standalone DSP verification tests" OFF)
+option(STOPDIAL_BUILD_TESTS "Build dependency-free C++ DSP regression tests" ON)
 if(STOPDIAL_BUILD_TESTS)
     enable_testing()
-    # The test harness is an in-plugin debug check, documented in tests/README.md.
+    add_executable(StopDialDSPTests tests/stopdial_math_tests.cpp)
+    target_compile_features(StopDialDSPTests PRIVATE cxx_std_17)
+    add_test(NAME StopDialDSPTests COMMAND StopDialDSPTests)
 endif()

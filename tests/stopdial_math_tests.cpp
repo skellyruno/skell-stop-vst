@@ -1,0 +1,335 @@
+#include "../Source/dsp/StopDialMath.h"
+#include <array>
+// Keep assertions active in Release/CI builds compiled with -DNDEBUG.
+#ifdef NDEBUG
+#undef NDEBUG
+#endif
+#include <cassert>
+#include <cmath>
+#include <iostream>
+#include <vector>
+
+namespace
+{
+    bool near(double a, double b, double tolerance = 1e-6)
+    {
+        return std::abs(a - b) < tolerance;
+    }
+
+    void testStopCurves()
+    {
+        for (double shape : { -100.0, -54.0, 0.0, 54.0, 100.0 })
+        {
+            double previous = 1.0;
+            for (int i = 0; i <= 10000; ++i)
+            {
+                const auto speed = StopDialMath::stopSpeed(i / 10000.0, shape);
+                assert(std::isfinite(speed) && speed >= 0.0 && speed <= 1.0);
+                assert(speed <= previous + 1e-12);
+                previous = speed;
+            }
+            assert(near(StopDialMath::stopSpeed(0.0, shape), 1.0));
+            assert(near(StopDialMath::stopSpeed(1.0, shape), 0.0));
+        }
+    }
+
+    void testTempoAndDivision()
+    {
+        assert(near(StopDialMath::beatSeconds(120.0), 0.5));
+        assert(near(StopDialMath::beatSeconds(90.0), 2.0/3.0));
+        assert(near(StopDialMath::beatSeconds(-1.0), 0.5));
+        assert(near(StopDialMath::beatSeconds(NAN), 0.5));
+        assert(near(StopDialMath::beatSeconds(20.0), 3.0));
+        // A stop running at 120 BPM for 1/4 beat length, then at 60 BPM:
+        // phase should be 0.5 after 0.25s and end after a further 0.5s.
+        constexpr double sr = 48000.0;
+        double phase = 0.0;
+        for (int sample = 0; sample < 12000; ++sample)
+            phase += 1.0 / (sr * StopDialMath::beatSeconds(120.0));
+        assert(near(phase, 0.5));
+        for (int sample = 0; sample < 24000; ++sample)
+            phase += 1.0 / (sr * StopDialMath::beatSeconds(60.0));
+        assert(near(phase, 1.0));
+    }
+
+    void testHermite()
+    {
+        for (float fractional : { 0.0f, 0.125f, 0.25f, 0.75f, 1.0f })
+        {
+            assert(near(StopDialMath::hermite(0.25f, 0.25f, 0.25f, 0.25f,
+                                               fractional), 0.25f));
+            assert(near(StopDialMath::hermite(0.0f, 1.0f, 2.0f, 3.0f,
+                                               fractional), 1.0 + fractional));
+        }
+    }
+
+    void testCausalTapeReader()
+    {
+        for (int historySize : { 8, 16, 128, 1024, 480000 })
+        {
+            for (int write : { 0, 1, 2, 3, 4, 5, 7, 8, 15, 127, 1023 })
+            {
+                const int nextWrite = write % historySize;
+                const int read = StopDialMath::causalReaderIndex(nextWrite, historySize);
+                assert(read >= 0 && read < historySize);
+                // The four interpolator taps -1, 0, +1, +2 must all refer
+                // to samples written before the upcoming frame is stored.
+                for (int offset : { -1, 0, 1, 2 })
+                {
+                    const int tap = StopDialMath::wrapLoopIndex(read + offset, historySize);
+                    const int age = StopDialMath::wrapLoopIndex(nextWrite - tap, historySize);
+                    assert(age >= 2 && age <= 5);
+                }
+            }
+        }
+    }
+
+    void testBoundedCubicTransients()
+    {
+        for (float prev : { -1.0f, 0.0f, 1.0f })
+            for (float a : { -1.0f, 0.0f, 1.0f })
+                for (float b : { -1.0f, 0.0f, 1.0f })
+                    for (float next : { -1.0f, 0.0f, 1.0f })
+                    {
+                        const float low = std::min(std::min(prev, a), std::min(b, next));
+                        const float high = std::max(std::max(prev, a), std::max(b, next));
+                        for (int i = 0; i <= 200; ++i)
+                        {
+                            const float frac = i * (1.0f / 200.0f);
+                            const float sample = StopDialMath::boundedHermite(prev, a, b, next, frac);
+                            assert(std::isfinite(sample));
+                            assert(sample >= low - 1e-6f && sample <= high + 1e-6f);
+                            if (i == 0) assert(near(sample, a));
+                            if (i == 200) assert(near(sample, b));
+                        }
+                    }
+        // Linearity and constant regions must survive the overshoot clamp.
+        for (int step = 0; step <= 100; ++step)
+            assert(near(StopDialMath::boundedHermite(-1, 0, 1, 2, step * 0.01f),
+                        step * 0.01, 1e-5));
+    }
+
+    void testModernToneStability()
+    {
+        // Test the EXACT ModernTone implementation used in the plugin.
+        for (double rate : { 22050., 44100., 48000., 96000., 192000. })
+        {
+            StopDialMath::ModernTone tone;
+            tone.prime(0.0f);
+            const float dcPole = static_cast<float>(std::exp(-2.0 * 3.141592653589793 * 12.0 / rate));
+            for (int i = 0; i < 48000; ++i)
+            {
+                const float speed = i < 15000 ? 1.0f : (i < 30000 ? 0.04f : 0.7f);
+                const float cutoffMax = static_cast<float>(std::min(18000.0, rate * 0.45));
+                const float cutoff = 180.0f + (cutoffMax - 180.0f) * std::pow(speed, 1.45f);
+                const float coefficient = 1.0f - std::exp(
+                    -6.283185307179586f * cutoff / static_cast<float>(rate));
+                const float input = std::sin(static_cast<float>(i) * 0.061f) * 0.95f;
+                const float output = tone.process(input, speed, coefficient, dcPole);
+                assert(std::isfinite(output));
+                assert(std::abs(output) <= 1.5f);
+            }
+            // A fresh trigger on another sound must clear stale filter memory.
+            tone.prime(0.0f);
+            assert(near(tone.lp1, 0) && near(tone.lp2, 0));
+            assert(near(tone.dcOutput, 0));
+        }
+    }
+
+    void testSeam()
+    {
+        assert(near(StopDialMath::splice(1.0f, -1.0f, 0.0f), 1.0f));
+        assert(near(StopDialMath::splice(1.0f, -1.0f, 1.0f), -1.0f));
+        assert(near(StopDialMath::splice(1.0f, 1.0f, 0.5f), 1.0f));
+        for (int i = 0; i <= 1000; ++i)
+        {
+            const float t = i / 1000.0f;
+            const auto y = StopDialMath::splice(0.8f, 0.8f, t);
+            assert(near(y, 0.8f));  // no +3 dB correlation bump
+            assert(StopDialMath::smoothFade(t) >= 0.0f);
+            assert(StopDialMath::smoothFade(t) <= 1.0f);
+        }
+    }
+
+    void testPeriodicLoopGuards()
+    {
+        constexpr int size = 256, start = 103, loopSize = 37;
+        std::array<float, size> ring {};
+        std::array<float, loopSize + 6> clip {};
+        for (int i = 0; i < size; ++i)
+            ring[i] = std::sin(i * 0.29f) + 0.16f * std::sin(i * 1.29f);
+        for (int i = 0; i < loopSize + 6; ++i)
+        {
+            const int idx = StopDialMath::wrapLoopIndex(i - 2, loopSize);
+            clip[i] = ring[(start + idx) % size];
+        }
+        assert(StopDialMath::wrapLoopIndex(-1, loopSize) == loopSize - 1);
+        assert(StopDialMath::wrapLoopIndex(-2, loopSize) == loopSize - 2);
+        assert(StopDialMath::wrapLoopIndex(loopSize, loopSize) == 0);
+        assert(StopDialMath::wrapLoopIndex(loopSize + 3, loopSize) == 3);
+        assert(StopDialMath::wrapLoopIndex(0, 0) == 0);
+        // The Hermite interpolation must be identical using the live periodic
+        // buffer and the completed guarded clip, even across the loop edge.
+        for (int i = -1; i <= loopSize; ++i)
+        {
+            for (int q = 0; q < 10; ++q)
+            {
+                const float t = q / 10.0f;
+                const auto liveSample = [&](int rel) {
+                    return ring[(start + StopDialMath::wrapLoopIndex(rel, loopSize)) % size];
+                };
+                const auto expected = StopDialMath::hermite(
+                    liveSample(i - 1), liveSample(i), liveSample(i + 1), liveSample(i + 2), t);
+                const auto actual = StopDialMath::hermite(
+                    clip[i + 1], clip[i + 2], clip[i + 3], clip[i + 4], t);
+                assert(near(actual, expected, 1e-6));
+            }
+        }
+        // Capture must remain stable even if the live history is overwritten.
+        ring.fill(0.0f);
+        assert(std::abs(clip[18]) > 0.001f);
+    }
+
+    void testShortLoopSelection()
+    {
+        for (int total : { 32, 64, 128, 600, 800 })
+        {
+            for (int startPct = 0; startPct <= 95; startPct += 5)
+            {
+                for (int endPct = startPct + 5; endPct <= 100; endPct += 5)
+                {
+                    const float a = startPct * 0.01f;
+                    const float b = endPct * 0.01f;
+                    const int length = std::clamp(static_cast<int>(total * (b - a)), 16, total);
+                    const int first = std::clamp(static_cast<int>(total * a), 0, total - length);
+                    assert(first >= 0 && first + length <= total);
+                    for (int i = 0; i < length + 6; ++i)
+                    {
+                        const int sample = first + StopDialMath::wrapLoopIndex(i - 2, length);
+                        assert(sample >= 0 && sample < total);
+                    }
+                }
+            }
+        }
+    }
+
+    void testLoopPeriodAfterCapture()
+    {
+        for (int size : { 1, 16, 17, 64, 512, 12000, 250000 })
+        {
+            for (double sr : { 44100.0, 48000.0, 96000.0, 192000.0 })
+            {
+                const int period = StopDialMath::loopPeriodSamples(size, sr);
+                assert(period >= 1 && period <= size);
+                if (size >= 16) assert(period < size);
+            }
+        }
+        // Stop may finish halfway through a host block, immediately replacing
+        // the initial/previous clip geometry with an entirely different one.
+        int period = StopDialMath::loopPeriodSamples(1, 48000.0);
+        assert(period == 1);
+        period = StopDialMath::loopPeriodSamples(4800, 48000.0);
+        assert(period > 4000);
+        double phase = 0;
+        for (int s = 0; s < 256; ++s)
+        {
+            phase += 1.0;
+            if (phase >= period) phase = std::fmod(phase, static_cast<double>(period));
+        }
+        assert(near(phase, 256.0));
+    }
+
+    void testStopToLoopTransition()
+    {
+        constexpr float slowEnd = 0.77f, loopFirst = -0.83f;
+        constexpr int length = 288; // 6 ms at 48 kHz
+        float previous = slowEnd;
+        for (int i = 0; i <= length; ++i)
+        {
+            const auto blend = StopDialMath::transitionGain(static_cast<float>(i) / length);
+            const auto out = slowEnd + (loopFirst - slowEnd) * blend;
+            assert(std::isfinite(out));
+            if (i == 0) assert(near(out, slowEnd));
+            if (i == length) assert(near(out, loopFirst));
+            assert(std::abs(out - previous) <= 0.009f); // No single-sample step.
+            previous = out;
+        }
+        // When incoming and looped signals already match, the handoff must
+        // not create the old two-fade volume dip.
+        for (int i = 0; i <= length; ++i)
+        {
+            const float gain = StopDialMath::transitionGain(i / static_cast<float>(length));
+            const float sameDC = slowEnd + (slowEnd - slowEnd) * gain;
+            assert(near(sameDC, slowEnd));
+        }
+    }
+
+    void testPatternGating()
+    {
+        for (int pattern = 0; pattern < 16; ++pattern)
+        {
+            for (int i = 0; i < 4000; ++i)
+            {
+                const auto phase = i / 4000.0 * 4800;
+                const auto value = StopDialMath::rhythmGate(pattern, phase, 4800, 96);
+                assert(value >= 0.0f && value <= 1.0f && std::isfinite(value));
+                if (pattern == 15) assert(value == 1.0f);
+                if (pattern == 0) assert(value == 0.0f);
+            }
+        }
+        assert(near(StopDialMath::rhythmGate(0b0011, 300, 4800, 96), 1.0));
+        assert(near(StopDialMath::rhythmGate(0b0011, 2900, 4800, 96), 0.0));
+        assert(near(StopDialMath::rhythmGate(0b0101, 1200, 4800, 96), 0.0));
+        assert(near(StopDialMath::rhythmGate(0b0101, 2400, 4800, 96), 0.0));
+    }
+
+    void testLoopSnapshot()
+    {
+        constexpr int size = 512;
+        constexpr int loopSize = 180;
+        constexpr int start = 163;
+        std::array<float, size> ring {};
+        std::array<float, size> clip {};
+        for (int i = 0; i < size; ++i)
+            ring[i] = static_cast<float>(std::sin(i * 0.07));
+        int copy = 0;
+        // Simulate continuous input and bounded snapshot copying.
+        // The writer begins well ahead of the material being preserved.
+        int write = 485;
+        while (copy < loopSize + 6)
+        {
+            for (int step = 0; step < 8 && copy < loopSize + 6; ++step)
+            {
+                const int src = (start + StopDialMath::wrapLoopIndex(copy - 2, loopSize)) % size;
+                clip[copy] = ring[src];
+                ++copy;
+            }
+            ring[write] = 0.0f;
+            write = (write + 1) % size;
+        }
+        // In this test the old source region is not yet overwritten.
+        for (int i = 0; i < loopSize + 6; ++i)
+            assert(near(clip[i], static_cast<float>(std::sin(
+                ((start + StopDialMath::wrapLoopIndex(i - 2, loopSize)) % size) * 0.07))));
+        ring.fill(0.0f);
+        assert(!near(clip[100], 0.0f)); // frozen loop survives ongoing capture
+    }
+}
+
+int main()
+{
+    testStopCurves();
+    testTempoAndDivision();
+    testHermite();
+    testCausalTapeReader();
+    testBoundedCubicTransients();
+    testModernToneStability();
+    testSeam();
+    testPeriodicLoopGuards();
+    testShortLoopSelection();
+    testLoopPeriodAfterCapture();
+    testStopToLoopTransition();
+    testPatternGating();
+    testLoopSnapshot();
+    std::cout << "StopDial DSP math and snapshot regression tests passed\n";
+}

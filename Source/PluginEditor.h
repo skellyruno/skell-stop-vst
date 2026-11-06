@@ -6,6 +6,7 @@
 #include "ui/DialComponent.h"
 #include "ui/RoundIconButton.h"
 #include "ui/ModePills.h"
+#include "ui/StatusStrip.h"
 
 class StopDialAudioProcessorEditor final : public juce::AudioProcessorEditor
 {
@@ -28,6 +29,8 @@ private:
     DialComponent dial;
     RoundIconButton curveButton, stopButton;
     ModePills modes;
+    StatusStrip status;
+    juce::TooltipWindow tooltips { this, 500 };
     juce::ComponentBoundsConstrainer boundsConstrainer;
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(StopDialAudioProcessorEditor)
 };

@@ -98,7 +98,8 @@ DialComponent::DialComponent(StopDialAudioProcessor& p)
     addAndMakeVisible(bezel);
     addAndMakeVisible(waveform);
     addAndMakeVisible(overlay);
-    setMouseCursor(juce::MouseCursor::DraggingHandCursor);
+    setMouseCursor(juce::MouseCursor::NormalCursor);
+    setTooltip("Drag the green dial to change stop depth; drag the percentage to change lock speed");
     auto make = [this](const char* id, auto callback)
     {
         return std::make_unique<juce::ParameterAttachment>(
@@ -291,4 +292,10 @@ void DialComponent::mouseMove(const juce::MouseEvent& e)
     const float r = std::hypot(x - c.x, y - c.y);
     const bool h = r > 213.0f && r < 268.0f;
     if (hovering != h) { hovering = h; overlay.repaint(); }
+    const bool overLock = y > 402.0f && y < 468.0f && x > 200.0f && x < 256.0f;
+    const bool overLockValue = y > 402.0f && y < 468.0f && x >= 256.0f && x < 380.0f;
+    setMouseCursor(overLock ? juce::MouseCursor::PointingHandCursor
+        : overLockValue ? juce::MouseCursor::UpDownResizeCursor
+        : h ? juce::MouseCursor::DraggingHandCursor
+        : juce::MouseCursor::NormalCursor);
 }

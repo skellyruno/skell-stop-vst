@@ -12,6 +12,7 @@ RoundIconButton::RoundIconButton(StopDialAudioProcessor& p, Kind type)
             [this](float v) { curveValue = v; repaint(); }, nullptr);
         valueAttachment->sendInitialUpdate();
         setMouseCursor(juce::MouseCursor::UpDownResizeCursor);
+        setTooltip("Drag vertically to change the braking curve; Shift for fine changes");
     }
     else
     {
@@ -24,6 +25,7 @@ RoundIconButton::RoundIconButton(StopDialAudioProcessor& p, Kind type)
         valueAttachment->sendInitialUpdate();
         syncAttachment->sendInitialUpdate();
         setMouseCursor(juce::MouseCursor::PointingHandCursor);
+        setTooltip("Click the square to trigger a tape stop; click its note value for timing");
     }
 }
 void RoundIconButton::paint(juce::Graphics& g)

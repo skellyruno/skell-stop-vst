@@ -11,9 +11,9 @@ namespace Theme
     constexpr float dialOuterRadius = 249.0f;
     constexpr float dialFaceRadius = 192.0f;
 
-    inline const juce::Colour background { 0xff262629 };
-    inline const juce::Colour header     { 0xff2b2a2d };
-    inline const juce::Colour footer     { 0xff202124 };
+    inline const juce::Colour background { 0xff2a2b2d };
+    inline const juce::Colour header     { 0xff232426 };
+    inline const juce::Colour footer     { 0xff1f2022 };
     inline const juce::Colour green      { 0xff6fd13a };
     inline const juce::Colour greenDark  { 0xff4fb52a };
     inline const juce::Colour face       { 0xff1b1b1e };

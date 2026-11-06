@@ -43,7 +43,7 @@ void ModePills::paint(juce::Graphics& g)
         g.setFont(Theme::font(25.0f));
         g.drawText(StopDialAudioProcessor::loopNames()[juce::jlimit(0, 8, loopIndex)],
                    433.0f, 57.0f, 89.0f, 35.0f, juce::Justification::centred);
-        const int heights[4] { 24, 22, 26, 25 };
+        const int heights[4] { 24, 18, 26, 21 };
         for (int i = 0; i < 4; ++i)
         {
             const bool on = (patternIndex >> i) & 1;
@@ -94,7 +94,12 @@ void ModePills::mouseDown(const juce::MouseEvent& e)
     }
     else if (modeIndex == 2 && y >= 51.0f && y < 99.0f)
     {
-        if (x > 518.0f) setPattern(patternIndex + 1);
+        if (x >= 522.0f && x < 566.0f)
+        {
+            // Click individual rhythm bars to toggle the corresponding beat.
+            const int step = juce::jlimit(0, 3, static_cast<int>((x - 525.0f) / 8.0f));
+            setPattern(patternIndex ^ (1 << step));
+        }
         else if (x > 427.0f) showLoopMenu();
     }
 }
@@ -102,7 +107,10 @@ void ModePills::mouseMove(const juce::MouseEvent& e)
 {
     const float x = e.position.x * baseW / std::max(1, getWidth());
     const float y = e.position.y * baseH / std::max(1, getHeight());
-    const int selected = y < 48.0f ? juce::jlimit(-1, 2, static_cast<int>(x / 204.0f)) : -1;
+    int selected = -1;
+    if (y < 48.0f)
+        for (int i = 0; i < 3; ++i)
+            if (x >= 204.0f * i && x <= 204.0f * i + 166.0f) selected = i;
     if (selected != hovered) { hovered = selected; repaint(); }
 }
 void ModePills::mouseExit(const juce::MouseEvent&) { hovered = -1; repaint(); }

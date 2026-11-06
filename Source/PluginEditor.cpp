@@ -66,7 +66,7 @@ void StopDialAudioProcessorEditor::Backdrop::paint(juce::Graphics& g)
 StopDialAudioProcessorEditor::StopDialAudioProcessorEditor(StopDialAudioProcessor& p)
     : AudioProcessorEditor(&p), processor(p), dial(p),
       curveButton(p, RoundIconButton::Kind::curve),
-      stopButton(p, RoundIconButton::Kind::stop), modes(p)
+      stopButton(p, RoundIconButton::Kind::stop), modes(p), status(p)
 {
     setLookAndFeel(&look);
     addAndMakeVisible(backdrop);
@@ -74,6 +74,7 @@ StopDialAudioProcessorEditor::StopDialAudioProcessorEditor(StopDialAudioProcesso
     addAndMakeVisible(curveButton);
     addAndMakeVisible(stopButton);
     addAndMakeVisible(modes);
+    addAndMakeVisible(status);
     boundsConstrainer.setSizeLimits(435, 535, 1087, 1338);
     boundsConstrainer.setFixedAspectRatio(static_cast<double>(Theme::designW) /
                                           static_cast<double>(Theme::designH));
@@ -101,6 +102,7 @@ void StopDialAudioProcessorEditor::resized()
     place(curveButton, 25, 581, 120, 145);
     place(stopButton, 579, 581, 120, 145);
     place(modes, 74, 738, 605, 122);
+    place(status, 168, 694, 390, 37);
     backdrop.toBack();
 }
 void StopDialAudioProcessorEditor::mouseDown(const juce::MouseEvent& e)
@@ -113,9 +115,10 @@ void StopDialAudioProcessorEditor::popupMainMenu()
 {
     juce::PopupMenu m;
     m.addSectionHeader("STOPDIAL");
-    m.addItem(1, "Reset controls");
+    m.addItem(1, "Reset controls to defaults");
+    m.addItem(2, "Resume live audio");
     m.addSeparator();
-    m.addItem(2, "About StopDial 1.0");
+    m.addItem(3, "About StopDial 2.0");
     juce::Component::SafePointer<StopDialAudioProcessorEditor> safe(this);
     m.showMenuAsync(juce::PopupMenu::Options().withTargetComponent(this),
         [safe](int result)
@@ -125,7 +128,7 @@ void StopDialAudioProcessorEditor::popupMainMenu()
             {
                 auto& p = safe->processor.apvts;
                 for (const auto& id : { "stopAmount", "curve", "syncDiv", "mode", "loopDiv",
-                                       "loopPattern", "lock", "lockAmount", "stopTrigger" })
+                                       "loopPattern", "lock", "lockAmount", "stopTrigger", "resumeTrigger" })
                 {
                     if (auto* param = p.getParameter(id))
                     {
@@ -136,9 +139,10 @@ void StopDialAudioProcessorEditor::popupMainMenu()
                 }
                 safe->processor.setLoopMarkers(0.25f, 0.75f);
             }
-            if (result == 2)
+            if (result == 2) safe->processor.requestResumeFromUI();
+            if (result == 3)
                 juce::AlertWindow::showMessageBoxAsync(juce::MessageBoxIconType::InfoIcon,
-                    "StopDial", "StopDial 1.0 — original JUCE tape-stop effect.\n"
+                    "StopDial", "StopDial 2.0 — vector tape-stop and tempo-loop effect.\n"
                                 "Design and DSP by Skell Audio.", "OK", safe.getComponent());
         });
 }
