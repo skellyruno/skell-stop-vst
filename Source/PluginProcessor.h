@@ -101,12 +101,13 @@ private:
     bool oldTrigger = false, oldResume = false;
     std::atomic<bool> pendingUIStop { false }, pendingUIResume { false };
     std::array<StopDialMath::ModernTone, 2> modernTone;
+    StopDialMath::ModernCutoffSmoother modernCutoff;
+    StopDialMath::GateSlew loopGateSlew;
     float dcPole = 0.998f;
     int peakCount = 0, peakSamples = 128;
     float peakMin = 0.0f, peakMax = 0.0f;
     juce::SmoothedValue<float, juce::ValueSmoothingTypes::Linear>
         amountSmooth, curveSmooth, lockSmooth, outputMix;
-    juce::SmoothedValue<float, juce::ValueSmoothingTypes::Multiplicative> cutoffSmooth;
 
     static double beatLengthForIndex(int index) noexcept;
     double interpolate(int channel, double position) const noexcept;

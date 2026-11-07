@@ -15,6 +15,7 @@ public:
     void mouseWheelMove(const juce::MouseEvent&, const juce::MouseWheelDetails&) override;
     void mouseEnter(const juce::MouseEvent&) override;
     void mouseExit(const juce::MouseEvent&) override;
+    bool keyPressed(const juce::KeyPress&) override;
 private:
     void setValue(float);
     void showDivisionMenu();

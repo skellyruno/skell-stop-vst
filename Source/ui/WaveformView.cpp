@@ -107,6 +107,11 @@ void WaveformView::paint(juce::Graphics& g)
     g.fillRect(end, yMid - range, baseW - end, 2.0f * range);
     g.setColour(Theme::green.withAlpha(0.16f));
     g.fillRect(start, yMid - range, end - start, 2.0f * range);
+    // Subtle annotation never pretends preview peaks are live measurements.
+    g.setColour(Theme::muted.withAlpha(0.55f));
+    g.setFont(Theme::font(10.8f, true));
+    g.drawText(liveInput ? "INPUT MONITOR" : "WAITING FOR AUDIO",
+               118.0f, 257.0f, 144.0f, 22.0f, juce::Justification::centred);
 
     // A thin animated playhead shows which part of the brake/loop is audible.
     const int status = processor.displayState.load(std::memory_order_relaxed);

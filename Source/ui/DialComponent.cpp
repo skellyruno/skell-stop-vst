@@ -98,6 +98,7 @@ DialComponent::DialComponent(StopDialAudioProcessor& p)
     addAndMakeVisible(bezel);
     addAndMakeVisible(waveform);
     addAndMakeVisible(overlay);
+    setWantsKeyboardFocus(true);
     setMouseCursor(juce::MouseCursor::NormalCursor);
     setTooltip("Drag the green dial to change stop depth; drag the percentage to change lock speed");
     auto make = [this](const char* id, auto callback)
@@ -146,6 +147,23 @@ void DialComponent::OverlayLayer::paint(juce::Graphics& g)
         g.strokePath(path, juce::PathStrokeType(20.0f,
             juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
     }
+    // Readout sits above the waveform's high-frequency bars, and makes
+    // the dial's active value explicit on all skins and at small window sizes.
+    const juce::Rectangle<float> readout(208.0f, 104.0f, 144.0f, 59.0f);
+    g.setColour(juce::Colour(0xff141618).withAlpha(0.90f));
+    g.fillRoundedRectangle(readout, 15.0f);
+    g.setColour(Theme::green.withAlpha(dial.hovering ? 0.60f : 0.26f));
+    g.drawRoundedRectangle(readout, 15.0f, 1.0f);
+    g.setFont(Theme::font(11.2f, true));
+    g.setColour(Theme::muted.withAlpha(0.86f));
+    g.drawText("STOP DEPTH", 218.0f, 109.0f, 124.0f, 20.0f,
+               juce::Justification::centred);
+    g.setFont(Theme::font(27.0f, true));
+    g.setColour(Theme::green);
+    g.drawText(juce::String(juce::roundToInt(dial.amountValue)) + "%",
+               215.0f, 126.0f, 130.0f, 32.0f,
+               juce::Justification::centred);
+
     // White playhead triangle at start of the green sweep.
     const auto anchor = Theme::radial(c, 249.0f, arcFrom);
     juce::Path pointer;
@@ -191,9 +209,9 @@ void DialComponent::OverlayLayer::paint(juce::Graphics& g)
     g.setFont(Theme::font(29.0f));
     g.drawText(juce::String(juce::roundToInt(dial.lockValue)) + "%",
         260, 405, 112, 48, juce::Justification::centred);
-    if (dial.hovering)
+    if (dial.hovering || dial.hasKeyboardFocus(true))
     {
-        g.setColour(Theme::green.withAlpha(0.24f));
+        g.setColour(Theme::green.withAlpha(dial.hasKeyboardFocus(true) ? 0.47f : 0.24f));
         g.drawEllipse(35.0f, 35.0f, 490.0f, 490.0f, 1.0f);
     }
 }
@@ -272,6 +290,13 @@ void DialComponent::mouseUp(const juce::MouseEvent&)
 void DialComponent::mouseDoubleClick(const juce::MouseEvent& e)
 {
     const float x = toBaseX(e.position.x), y = toBaseY(e.position.y);
+    if (y > 402.0f && y < 468.0f && x >= 256.0f && x < 380.0f)
+    {
+        lockAmountAttachment->beginGesture();
+        setLockAmount(14.0f);
+        lockAmountAttachment->endGesture();
+        return;
+    }
     if (std::hypot(x - c.x, y - c.y) > 211.0f)
     {
         amountAttachment->beginGesture();
@@ -282,10 +307,39 @@ void DialComponent::mouseDoubleClick(const juce::MouseEvent& e)
 void DialComponent::mouseWheelMove(const juce::MouseEvent& e,
                                    const juce::MouseWheelDetails& w)
 {
+    const float x = toBaseX(e.position.x), y = toBaseY(e.position.y);
+    if (y > 402.0f && y < 468.0f && x >= 256.0f && x < 380.0f)
+    {
+        lockAmountAttachment->beginGesture();
+        setLockAmount(lockValue + w.deltaY * (Theme::fineAdjust(e.mods) ? 0.5f : 4.0f));
+        lockAmountAttachment->endGesture();
+        return;
+    }
     amountAttachment->beginGesture();
     setAmount(amountValue + w.deltaY * (Theme::fineAdjust(e.mods) ? 1.0f : 8.0f));
     amountAttachment->endGesture();
 }
+bool DialComponent::keyPressed(const juce::KeyPress& key)
+{
+    const auto code = key.getKeyCode();
+    if (code == juce::KeyPress::upKey || code == juce::KeyPress::rightKey
+        || code == juce::KeyPress::downKey || code == juce::KeyPress::leftKey)
+    {
+        const float direction = code == juce::KeyPress::upKey
+                            || code == juce::KeyPress::rightKey ? 1.0f : -1.0f;
+        amountAttachment->beginGesture();
+        setAmount(amountValue + direction * (key.getModifiers().isShiftDown() ? 0.5f : 2.0f));
+        amountAttachment->endGesture();
+        return true;
+    }
+    return false;
+}
+
+void DialComponent::mouseExit(const juce::MouseEvent&)
+{
+    if (hovering) { hovering = false; overlay.repaint(); }
+}
+
 void DialComponent::mouseMove(const juce::MouseEvent& e)
 {
     const float x = toBaseX(e.position.x), y = toBaseY(e.position.y);

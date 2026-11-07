@@ -95,6 +95,8 @@ void StopDialAudioProcessor::prepareToPlay(double newSampleRate, int /*maxBlockS
     oldTrigger = oldResume = false;
     displayState.store(live, std::memory_order_relaxed);
     for (auto& tone : modernTone) tone.prime(0.0f);
+    modernCutoff.prepare(sampleRateHz);
+    loopGateSlew.prepare(sampleRateHz);
     dcPole = static_cast<float>(std::exp(-2.0 * juce::MathConstants<double>::pi * 12.0 / sampleRateHz));
     peakSamples = juce::jmax(16, static_cast<int>(sampleRateHz / 160.0));
     peakCount = 0;
@@ -105,12 +107,10 @@ void StopDialAudioProcessor::prepareToPlay(double newSampleRate, int /*maxBlockS
     curveSmooth.reset(sampleRateHz, 0.015);
     lockSmooth.reset(sampleRateHz, 0.02);
     outputMix.reset(sampleRateHz, 0.008);
-    cutoffSmooth.reset(sampleRateHz, 0.012);
     amountSmooth.setCurrentAndTargetValue(apvts.getRawParameterValue("stopAmount")->load() * 0.01f);
     curveSmooth.setCurrentAndTargetValue(apvts.getRawParameterValue("curve")->load());
     lockSmooth.setCurrentAndTargetValue(apvts.getRawParameterValue("lockAmount")->load() * 0.01f);
     outputMix.setCurrentAndTargetValue(0.0f);
-    cutoffSmooth.setCurrentAndTargetValue(18000.0f);
     transportProgress.store(0.0f, std::memory_order_relaxed);
     setLatencySamples(0);
 }
@@ -155,6 +155,8 @@ void StopDialAudioProcessor::beginStop(double bpm, int syncIndex) noexcept
     // Avoid dragging stale IIR history into a fresh retrigger after minutes of
     // dry input. The output handoff crossfade masks this reinitialisation.
     for (int ch = 0; ch < 2; ++ch) modernTone[static_cast<size_t>(ch)].prime(lastOutput[ch]);
+    modernCutoff.prepare(sampleRateHz);
+    loopGateSlew.prime(1.0f);
 }
 
 double StopDialAudioProcessor::wrap(double position) const noexcept
@@ -187,10 +189,10 @@ float StopDialAudioProcessor::interpolateClip(int channel, double position) cons
     // interpolator never wraps within an uninitialised portion of loopClip.
     const auto i = static_cast<int>(position);
     const float t = static_cast<float>(position - i);
-    return StopDialMath::hermite(loopClip.getSample(channel, i - 1),
-                                 loopClip.getSample(channel, i),
-                                 loopClip.getSample(channel, i + 1),
-                                 loopClip.getSample(channel, i + 2), t);
+    return StopDialMath::boundedHermite(loopClip.getSample(channel, i - 1),
+                                        loopClip.getSample(channel, i),
+                                        loopClip.getSample(channel, i + 1),
+                                        loopClip.getSample(channel, i + 2), t);
 }
 
 float StopDialAudioProcessor::interpolateLiveLoop(int channel, double position) const noexcept
@@ -205,8 +207,8 @@ float StopDialAudioProcessor::interpolateLiveLoop(int channel, double position) 
         return history.getSample(channel,
             static_cast<int>(wrap(heldLoopStart + static_cast<double>(offset))));
     };
-    return StopDialMath::hermite(sample(i - 1), sample(i),
-                                  sample(i + 1), sample(i + 2), frac);
+    return StopDialMath::boundedHermite(sample(i - 1), sample(i),
+                                         sample(i + 1), sample(i + 2), frac);
 }
 
 void StopDialAudioProcessor::copyClipStep() noexcept
@@ -274,6 +276,7 @@ void StopDialAudioProcessor::finishStop(int mode, int loopDiv) noexcept
     clipToCopy = heldLoopSize + 6;
     clipCopied = 0;
     clipReady = false;
+    loopGateSlew.prime(1.0f);  // A fresh loop starts with a predictable gate.
     state = EngineState::halted;
 }
 
@@ -454,17 +457,9 @@ void StopDialAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce
         // Don't calculate transcendental filter coefficients in Classic/Loop,
         // particularly when the effect is passing through live input.
         const bool modernProcessing = mode == 1 && state != EngineState::passThrough;
-        float oneMinusAlpha = 0.0f;
-        if (modernProcessing)
-        {
-            const float cutoffMax = static_cast<float>(juce::jmin(18000.0, sampleRateHz * 0.45));
-            const float targetCutoff = 180.0f + (cutoffMax - 180.0f)
-                * std::pow(juce::jlimit(0.0f, 1.0f, speed), 1.45f);
-            cutoffSmooth.setTargetValue(targetCutoff);
-            const float cutoff = cutoffSmooth.getNextValue();
-            oneMinusAlpha = 1.0f - std::exp(-juce::MathConstants<float>::twoPi
-                                       * cutoff / static_cast<float>(sampleRateHz));
-        }
+        // Compute cutoff's pow/exp only every 16 frames; an 8 ms coefficient
+        // slew ensures no zipper noise, including irregular host block sizes.
+        const float oneMinusAlpha = modernProcessing ? modernCutoff.next(speed) : 0.0f;
 
         // A severe BPM/curve change can exhaust the history even before a
         // stop completes. Fade to clean dry audio while there is still enough
@@ -483,8 +478,9 @@ void StopDialAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce
         const bool loopPlaying = state == EngineState::halted && mode == 2;
         const double loopPhase = loopCursor;
         const float rhythmGain = loopPlaying
-            ? StopDialMath::rhythmGate(pattern, loopPhase, loopPeriod,
-                                       sampleRateHz * 0.002 * loopRate) : 1.0f;
+            ? loopGateSlew.next(StopDialMath::rhythmGate(
+                pattern, loopPhase, loopPeriod, sampleRateHz * 0.002 * loopRate))
+            : 1.0f;
         // The brake tails smoothly to zero, including before entering a loop.
         const float remaining = static_cast<float>((1.0 - stopPhase) * stopDuration);
         // Loop mode uses the handoff crossfade at stop completion. Do NOT

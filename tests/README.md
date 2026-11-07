@@ -41,3 +41,23 @@ ctest --test-dir build-math --output-on-failure
 
 No JUCE render, host automation timing, or audible acceptance tests are
 included in this standalone math target.
+
+### v2.2 tests and optional performance measurement
+
+The native regression now covers the actual `ModernCutoffSmoother` and
+`GateSlew` helpers, their responses across sample rates, arbitrary rhythm
+pattern changes, invalid values, and bounded interpolation in both live and
+captured loop buffers. It is still **not** a plugin-host integration test.
+
+To measure only filter-coefficient calculation overhead (not total plugin CPU):
+
+```sh
+cmake -S . -B build-bench -DSTOPDIAL_MATH_ONLY=ON -DSTOPDIAL_PROFILE_DSP=ON
+cmake --build build-bench --parallel
+./build-bench/StopDialModernBenchmark
+```
+
+The baseline deliberately uses one `pow` and `exp` per sample (v2.1 behavior),
+while the updated version uses a shared target every 16 frames with audio-rate
+slewing. Results depend on compiler, optimization, CPU, and system load; do
+not extrapolate them to total DAW performance.

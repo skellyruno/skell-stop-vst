@@ -115,6 +115,66 @@ namespace StopDialMath
                                                        - std::max(1, releaseSamples) - 32));
     }
 
+    // Coefficients are expensive transcendental functions. Recompute only
+    // every 16 samples and smoothly approach the target at audio rate. One
+    // instance drives both channels so the stereo image remains coherent.
+    struct ModernCutoffSmoother
+    {
+        static constexpr int updateInterval = 16;
+        double sampleRate = 48000.0;
+        float coefficient = 0.0f, target = 0.0f, smoothing = 0.0f;
+        int framesUntilUpdate = 0;
+
+        void prepare(double rate) noexcept
+        {
+            sampleRate = std::clamp(rate, 8000.0, 384000.0);
+            const float maximum = static_cast<float>(std::min(18000.0, 0.45 * sampleRate));
+            coefficient = target = 1.0f - std::exp(-6.283185307179586f
+                             * maximum / static_cast<float>(sampleRate));
+            // An 8 ms attack/release prevents filter zipper noise without
+            // putting pow/exp in every per-sample DSP path.
+            smoothing = 1.0f - std::exp(-1.0f / static_cast<float>(sampleRate * 0.008));
+            framesUntilUpdate = 0;
+        }
+
+        float next(float speed) noexcept
+        {
+            if (framesUntilUpdate-- <= 0)
+            {
+                framesUntilUpdate = updateInterval - 1;
+                const float maxCutoff = static_cast<float>(std::min(18000.0, 0.45 * sampleRate));
+                const float safeSpeed = std::isfinite(speed) ? std::clamp(speed, 0.0f, 1.0f) : 1.0f;
+                const float cutoff = 180.0f + (maxCutoff - 180.0f)
+                    * std::pow(safeSpeed, 1.45f);
+                target = 1.0f - std::exp(-6.283185307179586f
+                              * cutoff / static_cast<float>(sampleRate));
+            }
+            coefficient += smoothing * (target - coefficient);
+            return std::clamp(coefficient, 0.0f, 1.0f);
+        }
+    };
+
+    // Envelopes for newly-enabled rhythm steps should never jump at an
+    // arbitrary automation sample. A short one-pole slew smooths the gate
+    // without introducing latency or allocating on the audio thread.
+    struct GateSlew
+    {
+        float level = 1.0f, coefficient = 1.0f;
+        void prepare(double sampleRate) noexcept
+        {
+            coefficient = 1.0f - std::exp(-1.0f / static_cast<float>(
+                std::max(1.0, sampleRate) * 0.00065));
+            level = 1.0f;
+        }
+        void prime(float value) noexcept { level = std::clamp(value, 0.0f, 1.0f); }
+        float next(float target) noexcept
+        {
+            const float saneTarget = std::isfinite(target) ? std::clamp(target, 0.0f, 1.0f) : 0.0f;
+            level += coefficient * (saneTarget - level);
+            return std::clamp(level, 0.0f, 1.0f);
+        }
+    };
+
     // Shared by the real JUCE engine and dependency-free native tests.
     // Output is completely unchanged by saturation at full tape speed; tone
     // and drive increase together as the brake approaches zero.
@@ -136,15 +196,21 @@ namespace StopDialMath
             lp2 += coefficient * (lp1 - lp2);
             const float tone = 1.0f - speed;
             wet += tone * (lp2 - wet);
+            // At full speed, avoid an unnecessary tanh (per channel per
+            // sample), yet keep DC history warm for a seamless slowdown.
+            if (tone <= 1.0e-5f)
+            {
+                dcOutput = wet - dcInput + dcPole * dcOutput;
+                dcInput = wet;
+                return wet;
+            }
             const float drive = 1.0f + 0.8f * tone;
             const float saturated = std::tanh(wet * drive) / drive;
             wet += tone * 0.6f * (saturated - wet);
             const float hp = wet - dcInput + dcPole * dcOutput;
             dcInput = wet;
             dcOutput = hp;
-            // At normal tape speed Modern must be transparent. The subsonic
-            // blocker is introduced gradually as the tape loses speed, rather
-            // than silently high-passing an otherwise unprocessed input.
+            // Introduce the subsonic blocker gradually as speed decays.
             return wet + tone * (hp - wet);
         }
     };

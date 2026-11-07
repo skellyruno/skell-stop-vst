@@ -2,6 +2,7 @@
 
 ModePills::ModePills(StopDialAudioProcessor& p) : processor(p)
 {
+    setWantsKeyboardFocus(true);
     auto make = [this](const char* id, auto cb)
     {
         return std::make_unique<juce::ParameterAttachment>(
@@ -31,6 +32,11 @@ void ModePills::paint(juce::Graphics& g)
         {
             g.setColour(Theme::green);
             g.drawRoundedRectangle(x + 0.8f, 0.8f, 164.4f, 42.4f, 22.0f, 1.9f);
+            if (hasKeyboardFocus(true))
+            {
+                g.setColour(Theme::green.withAlpha(0.42f));
+                g.drawRoundedRectangle(x - 2.5f, -2.5f, 171.0f, 49.0f, 24.0f, 1.4f);
+            }
         }
         g.setColour(active ? Theme::green : Theme::text);
         g.setFont(Theme::font(23.5f));
@@ -114,6 +120,22 @@ void ModePills::mouseMove(const juce::MouseEvent& e)
     if (selected != hovered) { hovered = selected; repaint(); }
 }
 void ModePills::mouseExit(const juce::MouseEvent&) { hovered = -1; repaint(); }
+bool ModePills::keyPressed(const juce::KeyPress& key)
+{
+    const auto code = key.getKeyCode();
+    if (code == juce::KeyPress::leftKey || code == juce::KeyPress::rightKey)
+    {
+        setMode((modeIndex + (code == juce::KeyPress::rightKey ? 1 : 2)) % 3);
+        return true;
+    }
+    if (code == '1' || code == '2' || code == '3')
+    {
+        setMode(code - '1');
+        return true;
+    }
+    return false;
+}
+
 void ModePills::mouseWheelMove(const juce::MouseEvent& e,
                               const juce::MouseWheelDetails& w)
 {

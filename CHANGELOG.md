@@ -1,5 +1,23 @@
 # StopDial changelog
 
+## 2.2.0 — Interface clarity, smoother loops, lower DSP overhead
+
+### Sound and real-time performance
+- Smooth arbitrary four-step rhythm mask automation through a short 0.65 ms de-click gate without introducing reported latency.
+- Bound cubic Hermite overshoot in both live-loop playback and frozen captured clips, not just the slowing tape reader.
+- Update Modern's expensive cutoff `pow/exp` math every 16 frames, slewing the shared stereo coefficient at the audio rate over about 8 ms.
+- Avoid evaluating `tanh` for Modern-mode processing at full tape speed while keeping filter/DC history warm.
+- Add native regression coverage for gate automation, coefficient bounds, cutoff settling, malformed host values, and loop interpolation.
+- Add an optional dependency-free Modern coefficient microbenchmark (`STOPDIAL_PROFILE_DSP=ON`).
+
+### Vector UI and controls
+- New legible green STOP DEPTH numerical display within the dial.
+- Restored the white curve dot to the beginning of its green path; added small CURVE / STOP LENGTH legends.
+- Waveform monitor distinguishes design preview from real input with an explicit status label.
+- Lock-speed percentage supports its own wheel gestures and double-click reset to 14%; dial hover now clears on mouse exit.
+- Keyboard focus and controls: Stop via Space/Enter, curve and stop depth via arrow keys, mode pills via Left/Right or 1–3; focus outlines remain vector-only.
+- Preserve the original 725×892 fixed-aspect layout, green/charcoal palette, APVTS IDs, and saved loop-marker keys.
+
 ## 2.1.0 — Safety and transparency
 
 - Detect exhausted tape history during both active braking and speed hold.

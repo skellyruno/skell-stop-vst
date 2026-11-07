@@ -1,7 +1,11 @@
-# StopDial v2.1 — JUCE VST3 + Standalone
+# StopDial v2.2 — JUCE VST3 + Standalone
 
-v2.1 hardens history-overwrite handling during tempo-automated braking and indefinite
-speed lock, restores full-speed Modern-tone transparency, and refreshes the waveform display after idle-time marker changes. Source and all existing parameter IDs remain compatible.
+v2.2 refines the vector UI and makes loop-pattern changes safer on audio:
+bounded cubic interpolation is now used for captured/live loop slices, the
+four-step gate has its own short de-click envelope, and Modern filtering updates
+expensive cutoff math every 16 samples with an 8 ms coefficient slew. The main
+dial now shows exact stop depth, plus contextual wheel, keyboard, and reset
+controls. All existing APVTS parameter IDs and preset state keys are preserved.
 
 
 StopDial is a vector-drawn stereo/mono tape-stop and rhythmic looping effect.
@@ -55,25 +59,32 @@ or `~/Library/Audio/Plug-Ins/VST3` on macOS.
   LOOPING, the host BPM, and a **RESUME** control to return immediately to
   normal live playback. The new `resumeTrigger` parameter can also be automated.
   UI clicks use an audio-thread event latch so short clicks are not lost.
-- **Green ring — stopAmount:** effect wet depth 0–100%; drag the arc, double-click
-  to reset. Shift-drag and Shift-wheel for fine adjustment.
+- **Green ring — stopAmount:** effect wet depth 0–100%; the new in-dial
+  value display shows the exact amount. Drag the arc or use Up/Down/Left/Right
+  while it has keyboard focus, double-click the ring to reset. Shift-wheel,
+  Shift-drag, and Shift-arrow fine adjustment are supported.
 - **Curve button — curve:** acceleration/braking shape, -100 to +100.
+  Revised curve indicator and separate label; Up/Down arrows adjust when focused.
 - **Stop square — stopTrigger:** a momentary APVTS bool, plus a UI-only event
   latch that catches quick mouse taps occurring between audio callbacks.
+  Space or Enter on a focused STOP button also triggers a complete pulse.
 - **Division label — syncDiv:** quarter-note subdivisions and dotted values;
   changing tempo while stopping changes the rate of phase advance, preserving
   the musical position. Division selection itself is latched at trigger.
 - **Mode:** Classic (tape speed), Modern (tape speed with low-pass / saturation),
-  or Loop (repeat a captured slice after braking).
+  or Loop (repeat a captured slice after braking). Focus the pills and use
+  Left/Right or the 1, 2, 3 keys to switch modes.
 - **Loop label — loopDiv:** 1/4, 1/8, dotted durations, and others.
 - **Four green bars — loopPattern:** click any individual bar to toggle its
   corresponding beat; each change is automatable through the existing
   four-bit rhythm mask (0–15). Pattern 15 plays without rhythmic gain dips.
 - **Padlock / percentage — lock and lockAmount:** toggles a non-zero final
-  speed and adjusts that speed as a percentage. Drag the percentage to edit.
+  speed and adjusts that speed as a percentage. Drag or wheel the percentage
+  to edit, Shift-wheel for fine control, or double-click it to reset to 14%.
 - **Waveform green handles:** drag either edge of the selected slice; the
   waveform now highlights handles on hover and shows a moving orange tape/loop
   playhead. Double-click a handle to restore the original marker positions.
+  A subtle waiting-for-audio label distinguishes preview peaks from input.
   Marker edits apply at the **next loop capture**, not to an already playing
   frozen slice, and are saved to the project state.
 
@@ -84,7 +95,8 @@ or `~/Library/Audio/Plug-Ins/VST3` on macOS.
    time. Recording happens in `processBlock`; buffers are allocated in
    `prepareToPlay` only.
 2. Variable-speed playback uses a shared stereo read cursor with bounded
-   four-point Hermite interpolation: cubic transients cannot overshoot the
+   four-point Hermite interpolation; as of v2.2 that same bounded reader is
+   used for frozen/live loop slices: cubic transients cannot overshoot the
    four source taps. The read cursor now starts a safe four frames behind the
    next write position so it cannot sample unwritten future taps. The slowdown
    duration is measured in beats with a block-rate update of host BPM so tempo
@@ -97,8 +109,10 @@ or `~/Library/Audio/Plug-Ins/VST3` on macOS.
    of the live recording buffer.
 4. Loop-splice overlap uses smooth **linear** crossfade weights (which sum to
    unity). This avoids equal-power boosts of nearly correlated samples. Gate
-   patterns only fade where adjacent steps differ. During Loop mode, subsequent
-   BPM changes adjust playback rate and loop transport progress.
+   patterns fade where adjacent steps differ, followed by a shared 0.65 ms
+   one-pole gate slew that prevents hard gain jumps if the four-bit pattern is
+   automated mid-step. During Loop mode, subsequent BPM changes adjust
+   playback rate and loop transport progress.
 5. Retriggers, stop entry, resume, and mode changes use a short output
    crossfade. Classic and Modern fade to quiet at stop completion; Loop uses
    only the stop-to-loop handoff and **does not fade to zero first**. This
@@ -113,10 +127,13 @@ or `~/Library/Audio/Plug-Ins/VST3` on macOS.
    stale peaks rather than drawing seconds-old audio. The audio reset no
    longer resets FIFO counters while an open editor might still be consuming,
    avoiding an avoidable data race on sample-rate reconfiguration.
-8. **Modern** now blends in two cascaded low-pass stages as the stop slows,
+8. **Modern** blends in two cascaded low-pass stages as the stop slows,
    uses speed-dependent, gain-compensated soft saturation, and includes a DC
-   blocker. Its processing state is primed on retrigger and the same filter
-   implementation is used by the native C++ stability tests.
+   blocker. It now avoids costly saturation at full tape speed. The shared
+   stereo cutoff coefficient updates its `pow/exp` calculations every 16
+   samples, then smooths over 8 ms at the audio rate to avoid zipper noise.
+   DSP states are reset on retrigger; the same components are covered by
+   the dependency-free native tests.
 9. When fully **LIVE**, the audio callback takes a lightweight dry-through
    path: no tape interpolation, exponential coefficients, waveshaping or phase
    math, while preserving live ring capture and waveform metering.
@@ -255,3 +272,19 @@ The optional `resumeTrigger` parameter was added in v2.0. No bitmap dependency.
 - Corrected WaveformView hit testing so it no longer intercepts padlock/amount
   control clicks; cleaned stale peak FIFO on editor opening.
 - CMake CTest target for standalone C++ DSP math tests, and CI test steps.
+
+### Optional CPU microbenchmark
+
+```sh
+cmake -S . -B build-bench -DSTOPDIAL_MATH_ONLY=ON -DSTOPDIAL_PROFILE_DSP=ON
+cmake --build build-bench --parallel
+./build-bench/StopDialModernBenchmark
+```
+
+This times only the shared Modern filter-coefficient updates, comparing the
+v2.1 per-frame calculation against the decimated + smoothed v2.2 version.
+On the development Linux container (GCC -O3, 3 million frames), the new
+coefficient path measured about **2.4× faster** (54.5 ms vs 23.1 ms).
+This is **not** an overall plugin CPU figure; the effect also performs cubic
+sampling, filtering, saturation, loop copying, GUI rendering, and DAW I/O.
+Re-run the benchmark on the target system before interpreting its speed.

@@ -4,6 +4,7 @@
 RoundIconButton::RoundIconButton(StopDialAudioProcessor& p, Kind type)
     : processor(p), kind(type)
 {
+    setWantsKeyboardFocus(true);
     auto& tree = processor.apvts;
     if (kind == Kind::curve)
     {
@@ -33,6 +34,11 @@ void RoundIconButton::paint(juce::Graphics& g)
     g.addTransform(juce::AffineTransform::scale(getWidth() / baseW, getHeight() / baseH));
     g.setColour(Theme::pill.brighter(hovered ? 0.18f : 0.0f));
     g.fillEllipse(18.0f, 5.0f, 82.0f, 82.0f);
+    if (hasKeyboardFocus(true))
+    {
+        g.setColour(Theme::green.withAlpha(0.70f));
+        g.drawEllipse(16.0f, 3.0f, 86.0f, 86.0f, 1.7f);
+    }
     if (kind == Kind::curve)
     {
         const float bend = juce::jmap(curveValue, -100.0f, 100.0f, 1.0f, 0.0f);
@@ -45,9 +51,11 @@ void RoundIconButton::paint(juce::Graphics& g)
         g.strokePath(curve, juce::PathStrokeType(3.2f,
             juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
         g.setColour(juce::Colour(0xffeeeeed));
-        g.fillEllipse(33.0f, 58.0f, 12.0f, 12.0f);
+        // The white dot is the start of the drawn curve, not an unrelated
+        // floating indicator.
+        g.fillEllipse(30.0f, 21.0f, 12.0f, 12.0f);
         g.setColour(juce::Colour(0xff212326));
-        g.drawEllipse(33.0f, 58.0f, 12.0f, 12.0f, 1.4f);
+        g.drawEllipse(30.0f, 21.0f, 12.0f, 12.0f, 1.4f);
     }
     else
     {
@@ -55,11 +63,15 @@ void RoundIconButton::paint(juce::Graphics& g)
         g.setColour(col);
         g.fillRoundedRectangle(47.0f, 32.0f, 24.0f, 24.0f, 3.5f);
     }
-    g.setColour(Theme::muted.brighter(hovered ? 0.25f : 0.0f));
-    g.setFont(Theme::font(25.0f));
+    g.setColour(Theme::muted.withAlpha(0.67f));
+    g.setFont(Theme::font(10.6f, true));
+    g.drawText(kind == Kind::curve ? "CURVE" : "STOP LENGTH", 0, 94, 120, 17,
+               juce::Justification::centred);
+    g.setColour(hovered ? Theme::text.brighter(0.2f) : Theme::text);
+    g.setFont(Theme::font(23.0f));
     g.drawText(kind == Kind::curve ? juce::String(juce::roundToInt(curveValue))
                                  : StopDialAudioProcessor::syncNames()[syncIndex],
-        0, 100, 120, 33, juce::Justification::centred);
+        0, 109, 120, 34, juce::Justification::centred);
 }
 void RoundIconButton::setValue(float v)
 {
@@ -138,5 +150,30 @@ void RoundIconButton::mouseWheelMove(const juce::MouseEvent& e,
         valueAttachment->endGesture();
     }
 }
+bool RoundIconButton::keyPressed(const juce::KeyPress& key)
+{
+    const auto code = key.getKeyCode();
+    if (kind == Kind::stop
+        && (code == juce::KeyPress::spaceKey || code == juce::KeyPress::returnKey))
+    {
+        processor.requestStopFromUI();
+        valueAttachment->beginGesture();
+        valueAttachment->setValueAsPartOfGesture(1.0f);
+        valueAttachment->setValueAsPartOfGesture(0.0f);
+        valueAttachment->endGesture();
+        return true;
+    }
+    if (kind == Kind::curve
+        && (code == juce::KeyPress::upKey || code == juce::KeyPress::downKey))
+    {
+        valueAttachment->beginGesture();
+        setValue(curveValue + (code == juce::KeyPress::upKey ? 1.0f : -1.0f)
+                 * (key.getModifiers().isShiftDown() ? 0.5f : 5.0f));
+        valueAttachment->endGesture();
+        return true;
+    }
+    return false;
+}
+
 void RoundIconButton::mouseEnter(const juce::MouseEvent&) { hovered = true; repaint(); }
 void RoundIconButton::mouseExit(const juce::MouseEvent&) { hovered = false; repaint(); }

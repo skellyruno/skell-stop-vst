@@ -151,6 +151,69 @@ namespace
         }
     }
 
+    void testModernCutoffSmoothing()
+    {
+        // Exercise the exact decimated coefficient generator used by JUCE.
+        for (double rate : { 22050.0, 44100.0, 48000.0, 96000.0, 192000.0 })
+        {
+            StopDialMath::ModernCutoffSmoother c;
+            c.prepare(rate);
+            const float maximum = static_cast<float>(std::min(18000.0, rate * 0.45));
+            const float bright = 1.0f - std::exp(-6.283185307179586f * maximum
+                                               / static_cast<float>(rate));
+            const float dark = 1.0f - std::exp(-6.283185307179586f * 180.0f
+                                             / static_cast<float>(rate));
+            assert(near(c.next(1.0f), bright, 1.0e-6));
+            // Smoother moves monotonically over a sudden speed drop without
+            // a single-sample discontinuity. It should settle within 0.2s.
+            float previous = c.coefficient;
+            for (int n = 0; n < static_cast<int>(rate * 0.2); ++n)
+            {
+                const float x = c.next(0.0f);
+                assert(std::isfinite(x) && x >= 0.0f && x <= 1.0f);
+                assert(x <= previous + 1.0e-6f);
+                previous = x;
+            }
+            assert(near(c.coefficient, dark, 3.0e-5));
+            for (int n = 0; n < static_cast<int>(rate * 0.2); ++n)
+                c.next(1.0f);
+            assert(near(c.coefficient, bright, 3.0e-5));
+            // A malformed host value must never poison the filter state.
+            assert(std::isfinite(c.next(std::numeric_limits<float>::quiet_NaN())));
+        }
+    }
+
+    void testRhythmGateSlew()
+    {
+        for (double rate : { 22050.0, 48000.0, 96000.0 })
+        {
+            StopDialMath::GateSlew gate;
+            gate.prepare(rate);
+            gate.prime(1.0f);
+            float previous = 1.0f;
+            for (int n = 0; n < static_cast<int>(rate * 0.01); ++n)
+            {
+                const float x = gate.next(0.0f);
+                assert(std::isfinite(x) && x <= previous && x >= 0.0f);
+                assert(previous - x < 0.09f); // No hard 1-sample gain step.
+                previous = x;
+            }
+            assert(gate.level < 0.001f);
+            for (int n = 0; n < static_cast<int>(rate * 0.01); ++n)
+                gate.next(1.0f);
+            assert(gate.level > 0.999f);
+            assert(std::isfinite(gate.next(std::numeric_limits<float>::quiet_NaN())));
+            for (int p = 0; p < 16; ++p)
+                for (int i = 0; i < 1000; ++i)
+                {
+                    const float target = StopDialMath::rhythmGate(p,
+                        i * 4.8, 4800.0, 96.0);
+                    const float output = gate.next(target);
+                    assert(std::isfinite(output) && output >= 0.0f && output <= 1.0f);
+                }
+        }
+    }
+
     void testModernToneStability()
     {
         // Test the EXACT ModernTone implementation used in the plugin.
@@ -220,9 +283,9 @@ namespace
                 const auto liveSample = [&](int rel) {
                     return ring[(start + StopDialMath::wrapLoopIndex(rel, loopSize)) % size];
                 };
-                const auto expected = StopDialMath::hermite(
+                const auto expected = StopDialMath::boundedHermite(
                     liveSample(i - 1), liveSample(i), liveSample(i + 1), liveSample(i + 2), t);
-                const auto actual = StopDialMath::hermite(
+                const auto actual = StopDialMath::boundedHermite(
                     clip[i + 1], clip[i + 2], clip[i + 3], clip[i + 4], t);
                 assert(near(actual, expected, 1e-6));
             }
@@ -367,6 +430,8 @@ int main()
     testBoundedCubicTransients();
     testTapeHistoryFailsSafe();
     testModernToneFullSpeedTransparency();
+    testModernCutoffSmoothing();
+    testRhythmGateSlew();
     testModernToneStability();
     testSeam();
     testPeriodicLoopGuards();
