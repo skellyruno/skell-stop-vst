@@ -6,7 +6,7 @@
 - Complete a bounded 50 ms fade to unprocessed input before data can be overwritten.
 - Prioritise history-safety release over normal stop/loop handoff to prevent stuck attenuation.
 - Preserve the original signal through Modern mode at full speed (no unwanted high-pass).
-- Pass header menu clicks through the non-interactive background layer.
+- Refresh waveform loop markers after preset loads, even while transport is idle.
 - Add regression tests for safety threshold, fade guard and full-speed tone transparency.
 
 ## 2.0.0 — UI + DSP upgrade

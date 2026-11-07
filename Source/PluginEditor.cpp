@@ -69,9 +69,6 @@ StopDialAudioProcessorEditor::StopDialAudioProcessorEditor(StopDialAudioProcesso
       stopButton(p, RoundIconButton::Kind::stop), modes(p), status(p)
 {
     setLookAndFeel(&look);
-    // Backdrop covers the editor. It must not consume mouse events, otherwise
-    // the top-left hamburger never reaches the editor's mouseDown handler.
-    backdrop.setInterceptsMouseClicks(false, false);
     addAndMakeVisible(backdrop);
     addAndMakeVisible(dial);
     addAndMakeVisible(curveButton);

@@ -1,8 +1,7 @@
 # StopDial v2.1 — JUCE VST3 + Standalone
 
 v2.1 hardens history-overwrite handling during tempo-automated braking and indefinite
-speed lock, restores full-speed Modern-tone transparency, and fixes the header
-menu's click interception. Source and all existing parameter IDs remain compatible.
+speed lock, restores full-speed Modern-tone transparency, and refreshes the waveform display after idle-time marker changes. Source and all existing parameter IDs remain compatible.
 
 
 StopDial is a vector-drawn stereo/mono tape-stop and rhythmic looping effect.

@@ -8,6 +8,9 @@ WaveformView::WaveformView(StopDialAudioProcessor& p) : processor(p)
     // Discard stale backlog accumulated while the editor was closed.
     WavePeak stale;
     while (processor.peaks.pop(stale)) {}
+    displayedMarkerStart = processor.loopStart.load(std::memory_order_relaxed);
+    displayedMarkerEnd = processor.loopEnd.load(std::memory_order_relaxed);
+    displayedTransportState = processor.displayState.load(std::memory_order_relaxed);
     startTimerHz(60);
 }
 
@@ -27,6 +30,20 @@ void WaveformView::timerCallback()
     if (std::abs(position - playheadPosition) > 0.005f)
     {
         playheadPosition = position;
+        dirty = true;
+    }
+    // Marker state can change through a preset load while transport is idle;
+    // the waveform must repaint even with no incoming peaks or moving playhead.
+    const float start = processor.loopStart.load(std::memory_order_relaxed);
+    const float end = processor.loopEnd.load(std::memory_order_relaxed);
+    const int transportState = processor.displayState.load(std::memory_order_relaxed);
+    if (std::abs(start - displayedMarkerStart) > 0.0005f
+        || std::abs(end - displayedMarkerEnd) > 0.0005f
+        || transportState != displayedTransportState)
+    {
+        displayedMarkerStart = start;
+        displayedMarkerEnd = end;
+        displayedTransportState = transportState;
         dirty = true;
     }
     if (dirty) repaint();

@@ -24,6 +24,8 @@ private:
     size_t writeColumn = 0;
     bool liveInput = false;
     float playheadPosition = 0.0f;
+    float displayedMarkerStart = 0.25f, displayedMarkerEnd = 0.75f;
+    int displayedTransportState = StopDialAudioProcessor::live;
     int hoverHandle = -1;
     int selectedMarker = -1;
     float baseW = 380.0f, baseH = 300.0f;
