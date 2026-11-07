@@ -22,8 +22,9 @@ jobs:
           from pathlib import Path
           import base64, hashlib, lzma, subprocess
 
-          parent = subprocess.check_output(["git", "rev-parse", "HEAD^"], text=True).strip()
-          assert parent == "09a0c99408ffeeda39b9654d505cebf4847fbea8", f"Unexpected repository version {parent}"
+          # The workflow-fix commit sits on top of the source staging commit.
+          baseline = subprocess.check_output(["git", "rev-parse", "HEAD~2"], text=True).strip()
+          assert baseline == "09a0c99408ffeeda39b9654d505cebf4847fbea8", f"Unexpected repository version {baseline}"
           folder = Path(".stopdial-update")
           parts = sorted(folder.glob("part*.txt"))
           assert len(parts) == 3, f"Expected 3 parts, got {len(parts)}"
@@ -37,10 +38,8 @@ jobs:
                          input=patch, check=True)
           for part in parts: part.unlink()
           folder.rmdir()
-          # Restore the standard, read-only CI for the source commit.
-          original = subprocess.check_output(
-              ["git", "show", "HEAD^:.github/workflows/build.yml"])
-          Path(".github/workflows/build.yml").write_bytes(original)
+          # Keep the workflow file unchanged in this restricted CI commit.
+          # Its read-only form will be restored via the GitHub integration.
           PY
           git -c user.name="stopdial-ci" -c user.email="stopdial-ci@users.noreply.github.com" add -A
           git diff --cached --check
