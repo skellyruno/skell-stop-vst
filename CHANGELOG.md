@@ -1,5 +1,14 @@
 # StopDial changelog
 
+## 2.1.0 — Safety and transparency
+
+- Detect exhausted tape history during both active braking and speed hold.
+- Complete a bounded 50 ms fade to unprocessed input before data can be overwritten.
+- Prioritise history-safety release over normal stop/loop handoff to prevent stuck attenuation.
+- Preserve the original signal through Modern mode at full speed (no unwanted high-pass).
+- Pass header menu clicks through the non-interactive background layer.
+- Add regression tests for safety threshold, fade guard and full-speed tone transparency.
+
 ## 2.0.0 — UI + DSP upgrade
 
 ### Sound engine

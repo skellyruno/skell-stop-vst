@@ -109,6 +109,48 @@ namespace
                         step * 0.01, 1e-5));
     }
 
+    void testTapeHistoryFailsSafe()
+    {
+        for (int capacity : { 8192, 48000, 768000, 3072000 })
+        {
+            for (int fade : { 128, 2400, 9600 })
+            {
+                const double threshold = std::max(0, capacity - fade - 32);
+                assert(!StopDialMath::historyOverwriteImminent(threshold - 1.0,
+                                                                 capacity, fade));
+                assert(StopDialMath::historyOverwriteImminent(threshold,
+                                                               capacity, fade));
+                assert(StopDialMath::historyOverwriteImminent(capacity, capacity, fade));
+                // At worst one lag frame accumulates per output sample. A
+                // complete linear-in-time fade finishes before ring overwrite.
+                if (threshold > 0)
+                    assert(threshold + fade <= capacity - 32);
+            }
+        }
+        assert(StopDialMath::historyOverwriteImminent(
+                   std::numeric_limits<double>::quiet_NaN(), 8192, 200));
+    }
+
+    void testModernToneFullSpeedTransparency()
+    {
+        StopDialMath::ModernTone tone;
+        tone.prime(0.0f);
+        const float pole = 0.998f;
+        for (int i = 0; i < 10000; ++i)
+        {
+            const float x = 0.6f * std::sin(i * 0.018f) + 0.2f * std::cos(i * 0.04f);
+            // At speed 1, no high-pass or saturation should colour bass.
+            const float y = tone.process(x, 1.0f, 0.8f, pole);
+            assert(near(x, y, 1e-6));
+        }
+        // Still finite when slowing rapidly and with a DC input.
+        for (int i = 0; i < 20000; ++i)
+        {
+            const float y = tone.process(0.8f, 0.0f, 0.08f, pole);
+            assert(std::isfinite(y));
+        }
+    }
+
     void testModernToneStability()
     {
         // Test the EXACT ModernTone implementation used in the plugin.
@@ -323,6 +365,8 @@ int main()
     testHermite();
     testCausalTapeReader();
     testBoundedCubicTransients();
+    testTapeHistoryFailsSafe();
+    testModernToneFullSpeedTransparency();
     testModernToneStability();
     testSeam();
     testPeriodicLoopGuards();

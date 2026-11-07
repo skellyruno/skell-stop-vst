@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-project(StopDial VERSION 2.0.0 LANGUAGES C CXX)
+project(StopDial VERSION 2.1.0 LANGUAGES C CXX)
 
 # Dependency-free, fast DSP regression build for machines without the JUCE SDK.
 option(STOPDIAL_MATH_ONLY "Build native DSP tests without fetching JUCE" OFF)

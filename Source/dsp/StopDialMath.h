@@ -104,6 +104,17 @@ namespace StopDialMath
         return gain;
     }
 
+    // A long tempo-ramped stop may otherwise read audio that the live writer
+    // has already overwritten. Reserve the entire release fade plus cubic
+    // guard samples; fail safely to dry input instead of playing corrupted data.
+    inline bool historyOverwriteImminent(double lag, int historySamples,
+                                          int releaseSamples) noexcept
+    {
+        if (!std::isfinite(lag)) return true;
+        return lag >= static_cast<double>(std::max(0, historySamples
+                                                       - std::max(1, releaseSamples) - 32));
+    }
+
     // Shared by the real JUCE engine and dependency-free native tests.
     // Output is completely unchanged by saturation at full tape speed; tone
     // and drive increase together as the brake approaches zero.
@@ -131,7 +142,10 @@ namespace StopDialMath
             const float hp = wet - dcInput + dcPole * dcOutput;
             dcInput = wet;
             dcOutput = hp;
-            return hp;
+            // At normal tape speed Modern must be transparent. The subsonic
+            // blocker is introduced gradually as the tape loses speed, rather
+            // than silently high-passing an otherwise unprocessed input.
+            return wet + tone * (hp - wet);
         }
     };
 

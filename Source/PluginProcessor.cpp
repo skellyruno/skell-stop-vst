@@ -466,8 +466,14 @@ void StopDialAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce
                                        * cutoff / static_cast<float>(sampleRateHz));
         }
 
-        if (state == EngineState::lockedRun && safetyReleaseRemaining == 0
-            && tapeLag >= historySize - safetyReleaseLength - 16)
+        // A severe BPM/curve change can exhaust the history even before a
+        // stop completes. Fade to clean dry audio while there is still enough
+        // recorded input for every remaining read; never wrap into overwritten
+        // samples. The same guard applies to indefinite speed-lock playback.
+        if ((state == EngineState::slowing || state == EngineState::lockedRun)
+            && safetyReleaseRemaining == 0
+            && StopDialMath::historyOverwriteImminent(tapeLag, historySize,
+                                                       safetyReleaseLength))
             safetyReleaseRemaining = safetyReleaseLength;
         const float safetyGain = safetyReleaseRemaining > 0
             ? StopDialMath::smoothFade(static_cast<float>(safetyReleaseRemaining)
@@ -520,7 +526,20 @@ void StopDialAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce
             ++stopSample;
             if ((s & 31) == 0 || stopPhase >= 1.0)
                 transportProgress.store(static_cast<float>(stopPhase), std::memory_order_relaxed);
-            if (stopPhase >= 1.0)
+            // A safety release takes priority over the normal stop/loop
+            // handoff: otherwise a completed stop could freeze the release
+            // envelope and leave the output attenuated indefinitely.
+            if (safetyReleaseRemaining > 0)
+            {
+                if (--safetyReleaseRemaining == 0)
+                {
+                    state = EngineState::passThrough;
+                    stopPhase = 0.0;
+                    displayState.store(live, std::memory_order_relaxed);
+                    transportProgress.store(0.0f, std::memory_order_relaxed);
+                }
+            }
+            else if (stopPhase >= 1.0)
             {
                 finishStop(mode, loopDiv);
                 displayState.store(mode == 2 ? looping : locked ? holding : stopped,

@@ -69,6 +69,9 @@ StopDialAudioProcessorEditor::StopDialAudioProcessorEditor(StopDialAudioProcesso
       stopButton(p, RoundIconButton::Kind::stop), modes(p), status(p)
 {
     setLookAndFeel(&look);
+    // Backdrop covers the editor. It must not consume mouse events, otherwise
+    // the top-left hamburger never reaches the editor's mouseDown handler.
+    backdrop.setInterceptsMouseClicks(false, false);
     addAndMakeVisible(backdrop);
     addAndMakeVisible(dial);
     addAndMakeVisible(curveButton);
@@ -118,7 +121,7 @@ void StopDialAudioProcessorEditor::popupMainMenu()
     m.addItem(1, "Reset controls to defaults");
     m.addItem(2, "Resume live audio");
     m.addSeparator();
-    m.addItem(3, "About StopDial 2.0");
+    m.addItem(3, "About StopDial 2.1");
     juce::Component::SafePointer<StopDialAudioProcessorEditor> safe(this);
     m.showMenuAsync(juce::PopupMenu::Options().withTargetComponent(this),
         [safe](int result)
@@ -142,7 +145,7 @@ void StopDialAudioProcessorEditor::popupMainMenu()
             if (result == 2) safe->processor.requestResumeFromUI();
             if (result == 3)
                 juce::AlertWindow::showMessageBoxAsync(juce::MessageBoxIconType::InfoIcon,
-                    "StopDial", "StopDial 2.0 — vector tape-stop and tempo-loop effect.\n"
+                    "StopDial", "StopDial 2.1 — vector tape-stop and tempo-loop effect.\n"
                                 "Design and DSP by Skell Audio.", "OK", safe.getComponent());
         });
 }
