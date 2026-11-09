@@ -43,6 +43,7 @@ jobs:
           Compress-Archive package/* StopDial-Windows.zip
       - uses: actions/upload-artifact@v4
         with:
+          retention-days: 1
           name: StopDial-Windows
           path: StopDial-Windows.zip
           if-no-files-found: error
@@ -67,6 +68,7 @@ jobs:
           ditto -c -k --sequesterRsrc package StopDial-macOS.zip
       - uses: actions/upload-artifact@v4
         with:
+          retention-days: 1
           name: StopDial-macOS
           path: StopDial-macOS.zip
           if-no-files-found: error
