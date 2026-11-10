@@ -4,7 +4,7 @@
 namespace
 {
     constexpr float sz = 560.0f;
-    const juce::Point<float> c { 280.0f, 280.0f };
+    const juce::Point<float> dialCentre { 280.0f, 280.0f };
     constexpr float arcFrom = -0.78f;
     constexpr float arcTo = 2.34f;
 
@@ -32,14 +32,14 @@ DialComponent::BezelLayer::BezelLayer()
 
 void DialComponent::BezelLayer::paint(juce::Graphics& g)
 {
-    g.addTransform(juce::AffineTransform::scale(getWidth() / sz, getHeight() / sz));
+    g.addTransform(juce::AffineTransform::scale(static_cast<float>(getWidth()) / sz, static_cast<float>(getHeight()) / sz));
 
     // Soft multi-pass shadow and bevel, all drawn from vector geometry.
     for (int i = 17; i > 0; --i)
     {
         g.setColour(juce::Colours::black.withAlpha(0.004f + 0.009f * (17 - i) / 17.0f));
         const float r = 251.0f + i * 0.72f;
-        g.fillEllipse(c.x - r + 3.0f, c.y - r + 11.0f, 2.0f * r, 2.0f * r);
+        g.fillEllipse(dialCentre.x - r + 3.0f, dialCentre.y - r + 11.0f, 2.0f * r, 2.0f * r);
     }
     g.setColour(juce::Colour(0xff17181b));
     g.fillEllipse(25.0f, 26.0f, 510.0f, 510.0f);
@@ -62,8 +62,8 @@ void DialComponent::BezelLayer::paint(juce::Graphics& g)
         const bool major = (i % 8 == 0);
         const float r0 = major ? 208.0f : 211.0f;
         const float r1 = major ? 219.0f : 216.0f;
-        const auto p0 = Theme::radial(c, r0, angle);
-        const auto p1 = Theme::radial(c, r1, angle);
+        const auto p0 = Theme::radial(dialCentre, r0, angle);
+        const auto p1 = Theme::radial(dialCentre, r1, angle);
         g.setColour(juce::Colour(0xff929397).withAlpha(
             i == 0 ? 0.53f : major ? 0.21f : 0.085f));
         g.drawLine(p0.x, p0.y, p1.x, p1.y, major ? 1.6f : 0.85f);
@@ -74,7 +74,7 @@ void DialComponent::BezelLayer::paint(juce::Graphics& g)
     for (float angle : { 0.0f, Theme::pi * 0.5f, Theme::pi,
                          Theme::pi * 1.5f })
     {
-        const auto p = Theme::radial(c, 242.0f, angle);
+        const auto p = Theme::radial(dialCentre, 242.0f, angle);
         const auto tangent = juce::Point<float> { std::cos(angle), std::sin(angle) };
         g.drawLine(p.x - tangent.x * 16.0f, p.y - tangent.y * 16.0f,
                    p.x + tangent.x * 16.0f, p.y + tangent.y * 16.0f, 9.5f);
@@ -119,7 +119,7 @@ void DialComponent::resized()
 {
     bezel.setBounds(getLocalBounds());
     overlay.setBounds(getLocalBounds());
-    const auto sx = getWidth() / designSize, sy = getHeight() / designSize;
+    const auto sx = static_cast<float>(getWidth()) / designSize, sy = static_cast<float>(getHeight()) / designSize;
     waveform.setBounds(juce::Rectangle<int>(
         juce::roundToInt(90.0f * sx), juce::roundToInt(130.0f * sy),
         juce::roundToInt(380.0f * sx), juce::roundToInt(300.0f * sy)));
@@ -129,16 +129,16 @@ void DialComponent::paint(juce::Graphics&) {}
 
 void DialComponent::OverlayLayer::paint(juce::Graphics& g)
 {
-    g.addTransform(juce::AffineTransform::scale(getWidth() / sz, getHeight() / sz));
+    g.addTransform(juce::AffineTransform::scale(static_cast<float>(getWidth()) / sz, static_cast<float>(getHeight()) / sz));
     const float amt = juce::jlimit(0.0f, 1.0f, dial.amountValue / 100.0f);
     if (amt > 0.002f)
     {
-        const auto path = Theme::arc(c, 249.0f, arcFrom, arcFrom + (arcTo - arcFrom) * amt);
+        const auto path = Theme::arc(dialCentre, 249.0f, arcFrom, arcFrom + (arcTo - arcFrom) * amt);
         // Cheap vector glow: broad transparent strokes under the solid arc.
         for (int i = 15; i >= 1; i -= 3)
         {
             g.setColour(Theme::green.withAlpha(0.014f + (15 - i) * 0.0018f));
-            g.strokePath(path, juce::PathStrokeType(20.0f + i * 1.9f,
+            g.strokePath(path, juce::PathStrokeType(20.0f + static_cast<float>(i) * 1.9f,
                 juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
         }
         juce::ColourGradient green(juce::Colour(0xff85e257), 330, 115,
@@ -156,16 +156,16 @@ void DialComponent::OverlayLayer::paint(juce::Graphics& g)
     g.drawRoundedRectangle(readout, 15.0f, 1.0f);
     g.setFont(Theme::font(11.2f, true));
     g.setColour(Theme::muted.withAlpha(0.86f));
-    g.drawText("STOP DEPTH", 218.0f, 109.0f, 124.0f, 20.0f,
+    g.drawText("STOP DEPTH", juce::Rectangle<float>(218.0f, 109.0f, 124.0f, 20.0f),
                juce::Justification::centred);
     g.setFont(Theme::font(27.0f, true));
     g.setColour(Theme::green);
     g.drawText(juce::String(juce::roundToInt(dial.amountValue)) + "%",
-               215.0f, 126.0f, 130.0f, 32.0f,
+               juce::Rectangle<float>(215.0f, 126.0f, 130.0f, 32.0f),
                juce::Justification::centred);
 
     // White playhead triangle at start of the green sweep.
-    const auto anchor = Theme::radial(c, 249.0f, arcFrom);
+    const auto anchor = Theme::radial(dialCentre, 249.0f, arcFrom);
     juce::Path pointer;
     pointer.addTriangle(anchor.x - 15.0f, anchor.y - 10.0f,
                         anchor.x + 11.0f, anchor.y - 2.0f,
@@ -181,9 +181,9 @@ void DialComponent::OverlayLayer::paint(juce::Graphics& g)
 
     // Orange transport progress with continuously updated fraction.
     const float progress = juce::jlimit(0.0f, 1.0f, dial.phase);
-    const auto orangePath = Theme::arc(c, 201.5f, 1.56f, 1.56f + 1.28f * progress);
+    const auto orangePath = Theme::arc(dialCentre, 201.5f, 1.56f, 1.56f + 1.28f * progress);
     g.setColour(Theme::orange.withAlpha(0.19f));
-    g.strokePath(Theme::arc(c, 201.5f, 1.56f, 2.84f),
+    g.strokePath(Theme::arc(dialCentre, 201.5f, 1.56f, 2.84f),
         juce::PathStrokeType(11.0f, juce::PathStrokeType::curved,
                              juce::PathStrokeType::rounded));
     if (progress > 0.001f)
@@ -226,8 +226,8 @@ void DialComponent::timerCallback()
     }
 }
 
-float DialComponent::toBaseX(float x) const { return x * designSize / std::max(1, getWidth()); }
-float DialComponent::toBaseY(float y) const { return y * designSize / std::max(1, getHeight()); }
+float DialComponent::toBaseX(float x) const { return x * designSize / static_cast<float>(std::max(1, getWidth())); }
+float DialComponent::toBaseY(float y) const { return y * designSize / static_cast<float>(std::max(1, getHeight())); }
 void DialComponent::setAmount(float v)
 {
     if (amountAttachment) amountAttachment->setValueAsPartOfGesture(juce::jlimit(0.0f, 100.0f, v));
@@ -239,7 +239,7 @@ void DialComponent::setLockAmount(float v)
 void DialComponent::mouseDown(const juce::MouseEvent& e)
 {
     const float x = toBaseX(e.position.x), y = toBaseY(e.position.y);
-    const float radius = std::hypot(x - c.x, y - c.y);
+    const float radius = std::hypot(x - dialCentre.x, y - dialCentre.y);
     if (y > 402.0f && y < 468.0f && x > 200.0f && x < 256.0f)
     {
         if (lockAttachment)
@@ -269,12 +269,12 @@ void DialComponent::mouseDrag(const juce::MouseEvent& e)
     const float x = toBaseX(e.position.x), y = toBaseY(e.position.y);
     if (dragging == Dragging::lockAmount)
     {
-        const float delta = -e.getDistanceFromDragStartY() / std::max(1.0f, getHeight() / sz);
+        const float delta = -e.getDistanceFromDragStartY() / std::max(1.0f, static_cast<float>(getHeight()) / sz);
         setLockAmount(dragStartLock + delta * (Theme::fineAdjust(e.mods) ? 0.025f : 0.17f));
     }
     else if (dragging == Dragging::amount)
     {
-        float a = std::atan2(x - c.x, c.y - y);
+        float a = std::atan2(x - dialCentre.x, dialCentre.y - y);
         if (a < arcFrom) a += Theme::tau;
         float v = 100.0f * (a - arcFrom) / (arcTo - arcFrom);
         if (Theme::fineAdjust(e.mods)) v = amountValue + (v - amountValue) * 0.12f;
@@ -297,7 +297,7 @@ void DialComponent::mouseDoubleClick(const juce::MouseEvent& e)
         lockAmountAttachment->endGesture();
         return;
     }
-    if (std::hypot(x - c.x, y - c.y) > 211.0f)
+    if (std::hypot(x - dialCentre.x, y - dialCentre.y) > 211.0f)
     {
         amountAttachment->beginGesture();
         setAmount(100.0f);
@@ -343,7 +343,7 @@ void DialComponent::mouseExit(const juce::MouseEvent&)
 void DialComponent::mouseMove(const juce::MouseEvent& e)
 {
     const float x = toBaseX(e.position.x), y = toBaseY(e.position.y);
-    const float r = std::hypot(x - c.x, y - c.y);
+    const float r = std::hypot(x - dialCentre.x, y - dialCentre.y);
     const bool h = r > 213.0f && r < 268.0f;
     if (hovering != h) { hovering = h; overlay.repaint(); }
     const bool overLock = y > 402.0f && y < 468.0f && x > 200.0f && x < 256.0f;

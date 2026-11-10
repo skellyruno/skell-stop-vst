@@ -19,11 +19,11 @@ ModePills::ModePills(StopDialAudioProcessor& p) : processor(p)
 
 void ModePills::paint(juce::Graphics& g)
 {
-    g.addTransform(juce::AffineTransform::scale(getWidth() / baseW, getHeight() / baseH));
+    g.addTransform(juce::AffineTransform::scale(static_cast<float>(getWidth()) / baseW, static_cast<float>(getHeight()) / baseH));
     const char* labels[] { "CLASSIC", "MODERN", "LOOP" };
     for (int i = 0; i < 3; ++i)
     {
-        const float x = 0.0f + i * 204.0f;
+        const float x = 0.0f + static_cast<float>(i) * 204.0f;
         const bool active = modeIndex == i;
         g.setColour(active ? juce::Colour(0xff343839)
                            : Theme::pill.brighter(hovered == i ? 0.15f : 0.0f));
@@ -48,7 +48,7 @@ void ModePills::paint(juce::Graphics& g)
         g.setColour(Theme::muted);
         g.setFont(Theme::font(25.0f));
         g.drawText(StopDialAudioProcessor::loopNames()[juce::jlimit(0, 8, loopIndex)],
-                   433.0f, 57.0f, 89.0f, 35.0f, juce::Justification::centred);
+                   juce::Rectangle<float>(433.0f, 57.0f, 89.0f, 35.0f), juce::Justification::centred);
         if (hoveringLoopLength)
         {
             g.setColour(Theme::green.withAlpha(0.55f));
@@ -58,14 +58,14 @@ void ModePills::paint(juce::Graphics& g)
         for (int i = 0; i < 4; ++i)
         {
             const bool on = (patternIndex >> i) & 1;
-            const float barX = 527.0f + i * 8.0f;
+            const float barX = 527.0f + static_cast<float>(i) * 8.0f;
             if (hoveredPattern == i)
             {
                 g.setColour(Theme::green.withAlpha(0.10f));
                 g.fillRoundedRectangle(barX - 3.5f, 61.0f, 10.0f, 34.0f, 3.0f);
             }
             g.setColour(Theme::green.withAlpha(on ? 1.0f : 0.28f));
-            g.fillRoundedRectangle(barX, 66.0f + (26.0f - heights[i]) * 0.5f,
+            g.fillRoundedRectangle(barX, 66.0f + (26.0f - static_cast<float>(heights[i])) * 0.5f,
                                     3.1f, static_cast<float>(heights[i]), 1.0f);
         }
     }
@@ -101,12 +101,12 @@ void ModePills::showLoopMenu()
 }
 void ModePills::mouseDown(const juce::MouseEvent& e)
 {
-    const float x = e.position.x * baseW / std::max(1, getWidth());
-    const float y = e.position.y * baseH / std::max(1, getHeight());
+    const float x = e.position.x * baseW / static_cast<float>(std::max(1, getWidth()));
+    const float y = e.position.y * baseH / static_cast<float>(std::max(1, getHeight()));
     if (y < 48.0f)
     {
         for (int i = 0; i < 3; ++i)
-            if (x >= 204.0f * i && x <= 204.0f * i + 166.0f) { setMode(i); break; }
+            if (x >= 204.0f * static_cast<float>(i) && x <= 204.0f * static_cast<float>(i) + 166.0f) { setMode(i); break; }
     }
     else if (modeIndex == 2 && y >= 51.0f && y < 99.0f)
     {
@@ -121,12 +121,12 @@ void ModePills::mouseDown(const juce::MouseEvent& e)
 }
 void ModePills::mouseMove(const juce::MouseEvent& e)
 {
-    const float x = e.position.x * baseW / std::max(1, getWidth());
-    const float y = e.position.y * baseH / std::max(1, getHeight());
+    const float x = e.position.x * baseW / static_cast<float>(std::max(1, getWidth()));
+    const float y = e.position.y * baseH / static_cast<float>(std::max(1, getHeight()));
     int selected = -1;
     if (y < 48.0f)
         for (int i = 0; i < 3; ++i)
-            if (x >= 204.0f * i && x <= 204.0f * i + 166.0f) selected = i;
+            if (x >= 204.0f * static_cast<float>(i) && x <= 204.0f * static_cast<float>(i) + 166.0f) selected = i;
     const bool overLength = modeIndex == 2 && y >= 51.0f && y < 99.0f
                          && x > 427.0f && x < 522.0f;
     const int overPattern = modeIndex == 2 && y >= 51.0f && y < 99.0f
@@ -177,8 +177,8 @@ bool ModePills::keyPressed(const juce::KeyPress& key)
 void ModePills::mouseWheelMove(const juce::MouseEvent& e,
                               const juce::MouseWheelDetails& w)
 {
-    const float x = e.position.x * baseW / std::max(1, getWidth());
-    const float y = e.position.y * baseH / std::max(1, getHeight());
+    const float x = e.position.x * baseW / static_cast<float>(std::max(1, getWidth()));
+    const float y = e.position.y * baseH / static_cast<float>(std::max(1, getHeight()));
     if (modeIndex == 2 && y > 50.0f && x > 420.0f)
     {
         auto& attachment = x > 520.0f ? *patternAttachment : *loopAttachment;

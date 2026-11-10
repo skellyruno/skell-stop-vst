@@ -56,7 +56,7 @@ float WaveformView::pixelToFraction(float x) const noexcept
 
 void WaveformView::paint(juce::Graphics& g)
 {
-    g.addTransform(juce::AffineTransform::scale(getWidth() / baseW, getHeight() / baseH));
+    g.addTransform(juce::AffineTransform::scale(static_cast<float>(getWidth()) / baseW, static_cast<float>(getHeight()) / baseH));
     juce::Path clip;
     clip.addEllipse(baseW * 0.5f - 186.0f, baseH * 0.5f - 186.0f, 372.0f, 372.0f);
     g.reduceClipRegion(clip);
@@ -111,7 +111,7 @@ void WaveformView::paint(juce::Graphics& g)
     g.setColour(Theme::muted.withAlpha(0.55f));
     g.setFont(Theme::font(10.8f, true));
     g.drawText(liveInput ? "INPUT MONITOR" : "WAITING FOR AUDIO",
-               118.0f, 257.0f, 144.0f, 22.0f, juce::Justification::centred);
+               juce::Rectangle<float>(118.0f, 257.0f, 144.0f, 22.0f), juce::Justification::centred);
 
     // A thin animated playhead shows which part of the brake/loop is audible.
     const int status = processor.displayState.load(std::memory_order_relaxed);
@@ -144,8 +144,8 @@ bool WaveformView::hitTest(int x, int y)
 {
     // Only the two handles intercept clicks. The lower half-moon lock and
     // number are painted in a sibling component and must remain clickable.
-    const float bx = x * baseW / std::max(1, getWidth());
-    const float by = y * baseH / std::max(1, getHeight());
+    const float bx = static_cast<float>(x) * baseW / static_cast<float>(std::max(1, getWidth()));
+    const float by = static_cast<float>(y) * baseH / static_cast<float>(std::max(1, getHeight()));
     if (by < 35.0f || by > 252.0f) return false;
     const float start = 12.0f + processor.loopStart.load() * (baseW - 24.0f);
     const float end = 12.0f + processor.loopEnd.load() * (baseW - 24.0f);
@@ -154,7 +154,7 @@ bool WaveformView::hitTest(int x, int y)
 
 void WaveformView::mouseMove(const juce::MouseEvent& e)
 {
-    const float x = e.position.x * baseW / std::max(1, getWidth());
+    const float x = e.position.x * baseW / static_cast<float>(std::max(1, getWidth()));
     const float a = 12.0f + processor.loopStart.load() * (baseW - 24.0f);
     const float b = 12.0f + processor.loopEnd.load() * (baseW - 24.0f);
     const float da = std::abs(x - a), db = std::abs(x - b);
@@ -171,7 +171,7 @@ void WaveformView::mouseExit(const juce::MouseEvent&)
 }
 void WaveformView::mouseDown(const juce::MouseEvent& e)
 {
-    const float x = e.position.x * baseW / std::max(1, getWidth());
+    const float x = e.position.x * baseW / static_cast<float>(std::max(1, getWidth()));
     const float a = 12.0f + processor.loopStart.load() * (baseW - 24.0f);
     const float b = 12.0f + processor.loopEnd.load() * (baseW - 24.0f);
     const float da = std::abs(x - a), db = std::abs(x - b);
@@ -181,7 +181,7 @@ void WaveformView::mouseDown(const juce::MouseEvent& e)
 void WaveformView::mouseDrag(const juce::MouseEvent& e)
 {
     if (selectedMarker < 0) return;
-    const auto v = pixelToFraction(e.position.x * baseW / std::max(1, getWidth()));
+    const auto v = pixelToFraction(e.position.x * baseW / static_cast<float>(std::max(1, getWidth())));
     const float start = processor.loopStart.load(), end = processor.loopEnd.load();
     processor.setLoopMarkers(selectedMarker == 0 ? juce::jmin(v, end - 0.05f) : start,
                              selectedMarker == 1 ? juce::jmax(v, start + 0.05f) : end);

@@ -24,7 +24,7 @@ private:
         void paint(juce::Graphics&) override;
     } backdrop;
     void popupMainMenu();
-    StopDialAudioProcessor& processor;
+    StopDialAudioProcessor& stopProcessor;
     StopDialLookAndFeel look;
     DialComponent dial;
     RoundIconButton curveButton, stopButton;

@@ -27,8 +27,8 @@ void StatusStrip::timerCallback()
 
 void StatusStrip::paint(juce::Graphics& g)
 {
-    g.addTransform(juce::AffineTransform::scale(getWidth() / width,
-                                                getHeight() / height));
+    g.addTransform(juce::AffineTransform::scale(static_cast<float>(getWidth()) / width,
+                                                static_cast<float>(getHeight()) / height));
     auto body = juce::Rectangle<float>(0.8f, 0.8f, width - 1.6f, height - 1.6f);
     g.setColour(juce::Colour(0xff1c1e20));
     g.fillRoundedRectangle(body, 17.5f);
@@ -48,14 +48,14 @@ void StatusStrip::paint(juce::Graphics& g)
     g.fillEllipse(18.0f, 16.0f, 6.0f, 6.0f);
     g.setFont(Theme::font(13.7f, true));
     g.setColour(Theme::text);
-    g.drawText(stateName, 38.0f, 7.0f, 123.0f, 24.0f, juce::Justification::centredLeft);
+    g.drawText(stateName, juce::Rectangle<float>(38.0f, 7.0f, 123.0f, 24.0f), juce::Justification::centredLeft);
 
     g.setColour(Theme::muted.withAlpha(0.22f));
     g.fillRect(165.0f, 9.0f, 1.0f, 19.0f);
     g.setFont(Theme::font(13.0f, true));
     g.setColour(Theme::muted);
     g.drawText(juce::String(juce::roundToInt(displayedBpm)) + " BPM",
-               172.0f, 7.0f, 81.0f, 24.0f, juce::Justification::centred);
+               juce::Rectangle<float>(172.0f, 7.0f, 81.0f, 24.0f), juce::Justification::centred);
 
     const juce::Rectangle<float> control(267.0f, 4.0f, 118.0f, 29.0f);
     g.setColour(overResume ? Theme::green.withAlpha(0.22f)
@@ -73,13 +73,13 @@ void StatusStrip::paint(juce::Graphics& g)
     g.fillPath(arrow);
     g.setFont(Theme::font(12.9f, true));
     g.setColour(active || overResume ? Theme::green : Theme::text);
-    g.drawText(active ? "RESUME" : "READY", 298.0f, 8.0f, 77.0f, 21.0f,
+    g.drawText(active ? "RESUME" : "READY", juce::Rectangle<float>(298.0f, 8.0f, 77.0f, 21.0f),
                juce::Justification::centred);
 }
 
 void StatusStrip::mouseDown(const juce::MouseEvent& e)
 {
-    const float bx = e.position.x * width / std::max(1, getWidth());
+    const float bx = e.position.x * width / static_cast<float>(std::max(1, getWidth()));
     if (bx < 262.0f) return;
     processor.requestResumeFromUI(); // Works even for <1-block button taps.
     resumeAttachment->beginGesture();
@@ -90,7 +90,7 @@ void StatusStrip::mouseDown(const juce::MouseEvent& e)
 
 void StatusStrip::mouseMove(const juce::MouseEvent& e)
 {
-    const bool now = e.position.x * width / std::max(1, getWidth()) >= 262.0f;
+    const bool now = e.position.x * width / static_cast<float>(std::max(1, getWidth())) >= 262.0f;
     if (now != overResume)
     {
         overResume = now;

@@ -22,8 +22,8 @@ namespace
 
 void StopDialAudioProcessorEditor::Backdrop::paint(juce::Graphics& g)
 {
-    g.addTransform(juce::AffineTransform::scale(getWidth() / Theme::designW,
-                                                 getHeight() / Theme::designH));
+    g.addTransform(juce::AffineTransform::scale(static_cast<float>(getWidth()) / Theme::designW,
+                                                 static_cast<float>(getHeight()) / Theme::designH));
     g.fillAll(Theme::background);
     juce::Path headerPath;
     headerPath.startNewSubPath(0, 0);
@@ -39,8 +39,8 @@ void StopDialAudioProcessorEditor::Backdrop::paint(juce::Graphics& g)
     // Hamburger: all vector strokes, no stock brand symbols.
     g.setColour(Theme::text.withAlpha(0.89f));
     for (int i = 0; i < 3; ++i)
-        g.drawLine(28.0f, 29.0f + i * 10.5f,
-                   i == 1 ? 51.0f : 53.0f, 29.0f + i * 10.5f, 1.8f);
+        g.drawLine(28.0f, 29.0f + static_cast<float>(i) * 10.5f,
+                   i == 1 ? 51.0f : 53.0f, 29.0f + static_cast<float>(i) * 10.5f, 1.8f);
 
     // Original StopDial emblem and two-tone wordmark.
     drawStopwatch(g, { 240.0f, 54.0f }, 24.0f, Theme::green);
@@ -64,7 +64,7 @@ void StopDialAudioProcessorEditor::Backdrop::paint(juce::Graphics& g)
 }
 
 StopDialAudioProcessorEditor::StopDialAudioProcessorEditor(StopDialAudioProcessor& p)
-    : AudioProcessorEditor(&p), processor(p), dial(p),
+    : AudioProcessorEditor(&p), stopProcessor(p), dial(p),
       curveButton(p, RoundIconButton::Kind::curve),
       stopButton(p, RoundIconButton::Kind::stop), modes(p), status(p)
 {
@@ -107,8 +107,8 @@ void StopDialAudioProcessorEditor::resized()
 }
 void StopDialAudioProcessorEditor::mouseDown(const juce::MouseEvent& e)
 {
-    const float x = e.position.x * Theme::designW / std::max(1, getWidth());
-    const float y = e.position.y * Theme::designH / std::max(1, getHeight());
+    const float x = e.position.x * Theme::designW / static_cast<float>(std::max(1, getWidth()));
+    const float y = e.position.y * Theme::designH / static_cast<float>(std::max(1, getHeight()));
     if (x < 75.0f && y < 80.0f) popupMainMenu();
 }
 void StopDialAudioProcessorEditor::popupMainMenu()
@@ -126,7 +126,7 @@ void StopDialAudioProcessorEditor::popupMainMenu()
             if (safe == nullptr) return;
             if (result == 1)
             {
-                auto& p = safe->processor.apvts;
+                auto& p = safe->stopProcessor.apvts;
                 for (const auto& id : { "stopAmount", "curve", "syncDiv", "mode", "loopDiv",
                                        "loopPattern", "lock", "lockAmount", "stopTrigger", "resumeTrigger" })
                 {
@@ -137,9 +137,9 @@ void StopDialAudioProcessorEditor::popupMainMenu()
                         param->endChangeGesture();
                     }
                 }
-                safe->processor.setLoopMarkers(0.25f, 0.75f);
+                safe->stopProcessor.setLoopMarkers(0.25f, 0.75f);
             }
-            if (result == 2) safe->processor.requestResumeFromUI();
+            if (result == 2) safe->stopProcessor.requestResumeFromUI();
             if (result == 3)
                 juce::AlertWindow::showMessageBoxAsync(juce::MessageBoxIconType::InfoIcon,
                     "StopDial", "StopDial 2.3 — vector tape-stop and tempo-loop effect.\n"

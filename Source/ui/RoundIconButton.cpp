@@ -31,7 +31,7 @@ RoundIconButton::RoundIconButton(StopDialAudioProcessor& p, Kind type)
 }
 void RoundIconButton::paint(juce::Graphics& g)
 {
-    g.addTransform(juce::AffineTransform::scale(getWidth() / baseW, getHeight() / baseH));
+    g.addTransform(juce::AffineTransform::scale(static_cast<float>(getWidth()) / baseW, static_cast<float>(getHeight()) / baseH));
     g.setColour(Theme::pill.brighter(hovered ? 0.18f : 0.0f));
     g.fillEllipse(18.0f, 5.0f, 82.0f, 82.0f);
     if (hasKeyboardFocus(true))
@@ -98,7 +98,7 @@ void RoundIconButton::showDivisionMenu()
 }
 void RoundIconButton::mouseDown(const juce::MouseEvent& e)
 {
-    const float y = e.position.y * baseH / std::max(1, getHeight());
+    const float y = e.position.y * baseH / static_cast<float>(std::max(1, getHeight()));
     if (kind == Kind::stop)
     {
         if (y > 98.0f) { showDivisionMenu(); return; }
@@ -116,13 +116,13 @@ void RoundIconButton::mouseDrag(const juce::MouseEvent& e)
 {
     if (kind == Kind::curve)
     {
-        const float move = e.getDistanceFromDragStartY() * baseH / std::max(1, getHeight());
+        const float move = static_cast<float>(e.getDistanceFromDragStartY()) * baseH / static_cast<float>(std::max(1, getHeight()));
         setValue(dragStartValue - move * (Theme::fineAdjust(e.mods) ? 0.1f : 0.75f));
     }
 }
 void RoundIconButton::mouseUp(const juce::MouseEvent& e)
 {
-    const float y = e.getMouseDownY() * baseH / std::max(1, getHeight());
+    const float y = static_cast<float>(e.getMouseDownY()) * baseH / static_cast<float>(std::max(1, getHeight()));
     if (kind == Kind::stop)
     {
         if (y <= 98.0f)

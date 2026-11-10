@@ -266,12 +266,12 @@ void StopDialAudioProcessor::finishStop(int mode, int loopDiv) noexcept
     const float b = juce::jlimit(a + 0.05f, 1.0f,
                                loopEnd.load(std::memory_order_relaxed));
     heldLoopSize = juce::jlimit(16, sourceLength,
-                               static_cast<int>(sourceLength * (b - a)));
+                               static_cast<int>(static_cast<float>(sourceLength) * (b - a)));
     // If a very short selected window must be expanded to the 16-frame
     // minimum, shift its start backward instead of reading unrecorded future
     // samples beyond the current write cursor.
     const int startOffset = juce::jlimit(0, sourceLength - heldLoopSize,
-                                         static_cast<int>(sourceLength * a));
+                                         static_cast<int>(static_cast<float>(sourceLength) * a));
     heldLoopStart = wrap(static_cast<double>(writeHead - sourceLength + startOffset));
     clipToCopy = heldLoopSize + 6;
     clipCopied = 0;
@@ -489,7 +489,7 @@ void StopDialAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce
                 pattern, loopPhase, loopPeriod, sampleRateHz * 0.002 * loopRate))
             : 1.0f;
         // The brake tails smoothly to zero, including before entering a loop.
-        const float remaining = static_cast<float>((1.0 - stopPhase) * stopDuration);
+        const float remaining = static_cast<float>((1.0 - stopPhase) * static_cast<double>(stopDuration));
         // Loop mode uses the handoff crossfade at stop completion. Do NOT
         // pre-fade to zero as well, which creates a 12 ms transient dropout.
         const float stopExit = state == EngineState::slowing && !locked && mode != 2

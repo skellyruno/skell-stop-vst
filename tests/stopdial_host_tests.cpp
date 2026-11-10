@@ -7,6 +7,7 @@
 #include <utility>
 #include <cmath>
 #include <cstdio>
+#include <cstring>
 #include <cstdlib>
 #include <limits>
 #include <memory>
@@ -68,7 +69,7 @@ namespace
                 largestStep = std::max(largestStep, static_cast<double>(std::abs(value - last[channel])));
             last[channel] = value;
         }
-        double rms() const { return samples ? std::sqrt(rmsAccum / samples) : 0.0; }
+        double rms() const { return samples ? std::sqrt(rmsAccum / static_cast<double>(samples)) : 0.0; }
     };
 
     Metrics render(StopDialAudioProcessor& p, Signal& signal,
@@ -88,7 +89,7 @@ namespace
                 {
                     const float sample = signal.next(ch);
                     audio.setSample(ch, s, sample);
-                    expected[static_cast<size_t>(s) * 2 + ch] = sample;
+                    expected[static_cast<size_t>(s) * 2 + static_cast<size_t>(ch)] = sample;
                 }
                 signal.phase += 1.0;
             }
@@ -99,7 +100,7 @@ namespace
                     const float y = audio.getSample(ch, s);
                     m.observe(ch, y);
                     if (expectDry)
-                        check(y == expected[static_cast<size_t>(s) * 2 + ch],
+                        check(std::memcmp(&y, &expected[static_cast<size_t>(s) * 2 + static_cast<size_t>(ch)], sizeof(y)) == 0,
                               "dry pass-through changed a sample");
                 }
             m.hasLast = true;
@@ -268,8 +269,10 @@ namespace
             check(editor->getComponentAt(40 * width / 725, 40 * height / 892) == editor.get(),
                   "decorative backdrop intercepts menu clicks");
             juce::Image image(juce::Image::ARGB, width, height, true);
-            juce::Graphics graphics(image);
-            editor->paintEntireComponent(graphics, true);
+            {
+                juce::Graphics graphics(image);
+                editor->paintEntireComponent(graphics, true);
+            } // Flush any deferred Windows draw commands before pixel inspection.
             int greenPixels = 0;
             for (int y = 0; y < height; y += 3)
                 for (int x = 0; x < width; x += 3)
@@ -285,8 +288,10 @@ namespace
                     dial = d;
             check(dial != nullptr, "editor has no dial");
             juce::Image isolated(juce::Image::ARGB, dial->getWidth(), dial->getHeight(), true);
-            juce::Graphics directGraphics(isolated);
-            dial->paintEntireComponent(directGraphics, true);
+            {
+                juce::Graphics directGraphics(isolated);
+                dial->paintEntireComponent(directGraphics, true);
+            } // Release renderer before inspecting the isolated dial.
             int isolatedGreen = 0;
             for (int y = 0; y < isolated.getHeight(); y += 3)
                 for (int x = 0; x < isolated.getWidth(); x += 3)
