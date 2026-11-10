@@ -1,4 +1,4 @@
-# StopDial v2.2 — JUCE VST3 + Standalone
+# StopDial v2.3 — JUCE VST3 + Standalone
 
 v2.2 refines the vector UI and makes loop-pattern changes safer on audio:
 bounded cubic interpolation is now used for captured/live loop slices, the
@@ -288,3 +288,14 @@ coefficient path measured about **2.4× faster** (54.5 ms vs 23.1 ms).
 This is **not** an overall plugin CPU figure; the effect also performs cubic
 sampling, filtering, saturation, loop copying, GUI rendering, and DAW I/O.
 Re-run the benchmark on the target system before interpreting its speed.
+
+### JUCE host-level regression suite (v2.3)
+
+When JUCE is available, `ctest --test-dir build -C Release --output-on-failure`
+now runs both `StopDialDSPTests` (native mathematics) and `StopDialHostTests`.
+The latter instantiates the real audio processor and renders the vector editor at
+435×535, 725×892 and 1087×1338, writing `StopDial-ui-*.png` into its CTest
+working directory. It exercises known audio, retrigger, Loop and Modern modes,
+resume, pattern automation, invalid input, latency and saved-state round trips.
+The CPU ratio printed by the host test is a smoke-test measurement, not a DAW
+benchmark; host hardware and DAW scheduling can change it substantially.

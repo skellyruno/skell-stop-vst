@@ -19,6 +19,7 @@ private:
     StopDialAudioProcessor& processor;
     std::unique_ptr<juce::ParameterAttachment> modeAttachment, loopAttachment, patternAttachment;
     int modeIndex = 2, loopIndex = 2, patternIndex = 15;
-    int hovered = -1;
+    int hovered = -1, hoveredPattern = -1;
+    bool hoveringLoopLength = false;
     static constexpr float baseW = 605.0f, baseH = 122.0f;
 };

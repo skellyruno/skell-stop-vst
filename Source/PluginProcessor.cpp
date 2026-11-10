@@ -276,7 +276,14 @@ void StopDialAudioProcessor::finishStop(int mode, int loopDiv) noexcept
     clipToCopy = heldLoopSize + 6;
     clipCopied = 0;
     clipReady = false;
-    loopGateSlew.prime(1.0f);  // A fresh loop starts with a predictable gate.
+    // Respect the actual rhythm mask at the *first* loop sample. Priming at
+    // unity made an all-muted pattern briefly audible on every fresh capture;
+    // priming the exact target avoids that burst and preserves all-on unity.
+    const int pattern = juce::jlimit(0, 15,
+        static_cast<int>(apvts.getRawParameterValue("loopPattern")->load()));
+    const double period = StopDialMath::loopPeriodSamples(heldLoopSize, sampleRateHz);
+    loopGateSlew.prime(StopDialMath::rhythmGate(pattern, 0.0, period,
+                                               sampleRateHz * 0.002));
     state = EngineState::halted;
 }
 

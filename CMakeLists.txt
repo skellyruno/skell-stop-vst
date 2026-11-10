@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-project(StopDial VERSION 2.2.0 LANGUAGES C CXX)
+project(StopDial VERSION 2.3.0 LANGUAGES C CXX)
 
 # Dependency-free, fast DSP regression build for machines without the JUCE SDK.
 option(STOPDIAL_MATH_ONLY "Build native DSP tests without fetching JUCE" OFF)
@@ -83,4 +83,19 @@ if(STOPDIAL_BUILD_TESTS)
     add_executable(StopDialDSPTests tests/stopdial_math_tests.cpp)
     target_compile_features(StopDialDSPTests PRIVATE cxx_std_17)
     add_test(NAME StopDialDSPTests COMMAND StopDialDSPTests)
+
+    # Full signal-chain/UI smoke tests, not a second implementation of the DSP.
+    # StopDial is the JUCE shared-code static target; reuse exactly those
+    # compiled plugin sources in the test executable.
+    add_executable(StopDialHostTests tests/stopdial_host_tests.cpp)
+    target_compile_features(StopDialHostTests PRIVATE cxx_std_17)
+    juce_generate_juce_header(StopDialHostTests)
+    target_compile_definitions(StopDialHostTests PRIVATE
+        JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_VST3_CAN_REPLACE_VST2=0)
+    target_link_libraries(StopDialHostTests PRIVATE StopDial
+        juce::juce_audio_utils juce::juce_audio_processors
+        juce::juce_gui_extra juce::juce_dsp
+        juce::juce_recommended_config_flags
+        juce::juce_recommended_warning_flags)
+    add_test(NAME StopDialHostTests COMMAND StopDialHostTests)
 endif()

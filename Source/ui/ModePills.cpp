@@ -49,11 +49,21 @@ void ModePills::paint(juce::Graphics& g)
         g.setFont(Theme::font(25.0f));
         g.drawText(StopDialAudioProcessor::loopNames()[juce::jlimit(0, 8, loopIndex)],
                    433.0f, 57.0f, 89.0f, 35.0f, juce::Justification::centred);
+        if (hoveringLoopLength)
+        {
+            g.setColour(Theme::green.withAlpha(0.55f));
+            g.drawLine(444.0f, 91.0f, 514.0f, 91.0f, 1.3f);
+        }
         const int heights[4] { 24, 18, 26, 21 };
         for (int i = 0; i < 4; ++i)
         {
             const bool on = (patternIndex >> i) & 1;
             const float barX = 527.0f + i * 8.0f;
+            if (hoveredPattern == i)
+            {
+                g.setColour(Theme::green.withAlpha(0.10f));
+                g.fillRoundedRectangle(barX - 3.5f, 61.0f, 10.0f, 34.0f, 3.0f);
+            }
             g.setColour(Theme::green.withAlpha(on ? 1.0f : 0.28f));
             g.fillRoundedRectangle(barX, 66.0f + (26.0f - heights[i]) * 0.5f,
                                     3.1f, static_cast<float>(heights[i]), 1.0f);
@@ -117,9 +127,28 @@ void ModePills::mouseMove(const juce::MouseEvent& e)
     if (y < 48.0f)
         for (int i = 0; i < 3; ++i)
             if (x >= 204.0f * i && x <= 204.0f * i + 166.0f) selected = i;
-    if (selected != hovered) { hovered = selected; repaint(); }
+    const bool overLength = modeIndex == 2 && y >= 51.0f && y < 99.0f
+                         && x > 427.0f && x < 522.0f;
+    const int overPattern = modeIndex == 2 && y >= 51.0f && y < 99.0f
+                         && x >= 522.0f && x < 560.0f
+                         ? juce::jlimit(0, 3, static_cast<int>((x - 525.0f) / 8.0f)) : -1;
+    if (selected != hovered || overLength != hoveringLoopLength || overPattern != hoveredPattern)
+    {
+        hovered = selected;
+        hoveringLoopLength = overLength;
+        hoveredPattern = overPattern;
+        repaint();
+    }
+    setMouseCursor(selected >= 0 || overLength || overPattern >= 0
+        ? juce::MouseCursor::PointingHandCursor : juce::MouseCursor::NormalCursor);
 }
-void ModePills::mouseExit(const juce::MouseEvent&) { hovered = -1; repaint(); }
+void ModePills::mouseExit(const juce::MouseEvent&)
+{
+    hovered = hoveredPattern = -1;
+    hoveringLoopLength = false;
+    setMouseCursor(juce::MouseCursor::NormalCursor);
+    repaint();
+}
 bool ModePills::keyPressed(const juce::KeyPress& key)
 {
     const auto code = key.getKeyCode();
@@ -131,6 +160,15 @@ bool ModePills::keyPressed(const juce::KeyPress& key)
     if (code == '1' || code == '2' || code == '3')
     {
         setMode(code - '1');
+        return true;
+    }
+    if (modeIndex == 2 && (code == '+' || code == '-' || code == juce::KeyPress::upKey
+                           || code == juce::KeyPress::downKey))
+    {
+        const int direction = (code == '+' || code == juce::KeyPress::upKey) ? 1 : -1;
+        loopAttachment->beginGesture();
+        loopAttachment->setValueAsPartOfGesture(static_cast<float>(juce::jlimit(0, 8, loopIndex + direction)));
+        loopAttachment->endGesture();
         return true;
     }
     return false;

@@ -1,5 +1,22 @@
 # StopDial changelog
 
+## 2.3.0 — Host-level DSP/UI verification and precision UX
+
+- Add a JUCE-linked host integration test that runs the actual processor across sample
+  rates and block sizes, including stop, looping, pattern automation, resume,
+  malformed upstream samples, zero-latency and state round-trip checks.
+- Render the actual vector editor at minimum, default and maximum sizes and check
+  child bounds, menu hit-testing and visible colour output. Save PNG proof images.
+- Prime the loop gate from the first rhythm step instead of full gain;
+  a completely muted pattern no longer emits an initial capture burst.
+- Include a measured 48 kHz Modern-mode callback CPU budget check (reports
+  actual callback time versus real-time block duration).
+- Improve loop-step hover affordances, discoverability of loop length editing and
+  keyboard accessibility (+/- or up/down to change loop division).
+- Preserve existing parameter IDs, audio modes, saved-state compatibility and
+  dependency-free sanitizer tests.
+
+
 ## 2.2.0 — Interface clarity, smoother loops, lower DSP overhead
 
 ### Sound and real-time performance
