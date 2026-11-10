@@ -87,9 +87,9 @@ if(STOPDIAL_BUILD_TESTS)
     # Full signal-chain/UI smoke tests, not a second implementation of the DSP.
     # StopDial is the JUCE shared-code static target; reuse exactly those
     # compiled plugin sources in the test executable.
-    add_executable(StopDialHostTests tests/stopdial_host_tests.cpp)
+    juce_add_console_app(StopDialHostTests PRODUCT_NAME "StopDial Host Tests")
+    target_sources(StopDialHostTests PRIVATE tests/stopdial_host_tests.cpp)
     target_compile_features(StopDialHostTests PRIVATE cxx_std_17)
-    juce_generate_juce_header(StopDialHostTests)
     target_compile_definitions(StopDialHostTests PRIVATE
         JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_VST3_CAN_REPLACE_VST2=0)
     target_link_libraries(StopDialHostTests PRIVATE StopDial
@@ -97,5 +97,6 @@ if(STOPDIAL_BUILD_TESTS)
         juce::juce_gui_extra juce::juce_dsp
         juce::juce_recommended_config_flags
         juce::juce_recommended_warning_flags)
+    juce_generate_juce_header(StopDialHostTests)
     add_test(NAME StopDialHostTests COMMAND StopDialHostTests)
 endif()
