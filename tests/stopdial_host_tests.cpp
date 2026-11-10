@@ -240,6 +240,7 @@ namespace
         p.prepareToPlay(48000, 512);
         std::unique_ptr<juce::AudioProcessorEditor> editor(p.createEditor());
         check(editor != nullptr, "could not create plugin editor");
+        editor->setVisible(true);
         for (const auto [width, height] : { std::pair{435, 535},
                                             std::pair{725, 892},
                                             std::pair{1087, 1338} })
@@ -250,7 +251,15 @@ namespace
             for (int i = 0; i < editor->getNumChildComponents(); ++i)
             {
                 const auto* child = editor->getChildComponent(i);
-                check(!child->getBounds().isEmpty(), "child has empty bounds");
+                // JUCE's TooltipWindow is a hidden, transient child whose
+                // bounds legitimately remain empty until the first tooltip.
+                // Do not mistake its unlaid-out state for a plugin control.
+                if (!child->isVisible() && child->getBounds().isEmpty())
+                    continue;
+                if (child->getBounds().isEmpty())
+                    std::fprintf(stderr, "UI: visible child %d (%s) has empty bounds at %dx%d\n",
+                        i, child->getName().toRawUTF8(), width, height);
+                check(!child->getBounds().isEmpty(), "visible editor child has empty bounds");
                 check(editor->getLocalBounds().contains(child->getBounds()),
                       "editor child clipped at resized dimensions");
             }
