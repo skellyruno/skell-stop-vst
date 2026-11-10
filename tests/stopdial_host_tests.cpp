@@ -279,13 +279,41 @@ namespace
                         && colour.getGreen() > colour.getBlue() * 1.15f)
                         ++greenPixels;
                 }
-            check(greenPixels > 30, "vector editor rendering missed the green dial");
+            DialComponent* dial = nullptr;
+            for (int i = 0; i < editor->getNumChildComponents(); ++i)
+                if (auto* d = dynamic_cast<DialComponent*>(editor->getChildComponent(i)))
+                    dial = d;
+            check(dial != nullptr, "editor has no dial");
+            juce::Image isolated(juce::Image::ARGB, dial->getWidth(), dial->getHeight(), true);
+            juce::Graphics directGraphics(isolated);
+            dial->paintEntireComponent(directGraphics, true);
+            int isolatedGreen = 0;
+            for (int y = 0; y < isolated.getHeight(); y += 3)
+                for (int x = 0; x < isolated.getWidth(); x += 3)
+                {
+                    const auto c = isolated.getPixelAt(x, y);
+                    if (c.getGreen() > c.getRed() * 1.30f
+                        && c.getGreen() > c.getBlue() * 1.15f)
+                        ++isolatedGreen;
+                }
+            const auto center = image.getPixelAt(width / 2, height / 2);
+            std::fprintf(stderr, "UI pixels %dx%d: full=%d dial=%d center=%d,%d,%d,%d\n",
+                         width, height, greenPixels, isolatedGreen,
+                         center.getAlpha(), center.getRed(), center.getGreen(), center.getBlue());
+            const auto dialFile = juce::File::getCurrentWorkingDirectory().getChildFile(
+                "StopDial-dial-" + juce::String(width) + "x" + juce::String(height) + ".png");
+            juce::FileOutputStream dialStream(dialFile);
+            check(dialStream.openedOk(), "cannot save isolated dial");
+            juce::PNGImageFormat dialPng;
+            check(dialPng.writeImageToStream(isolated, dialStream), "cannot encode isolated dial");
+            std::fflush(stderr);
             const auto file = juce::File::getCurrentWorkingDirectory().getChildFile(
                 "StopDial-ui-" + juce::String(width) + "x" + juce::String(height) + ".png");
             juce::FileOutputStream stream(file);
             check(stream.openedOk(), "failed to open screenshot output");
             juce::PNGImageFormat png;
             check(png.writeImageToStream(image, stream), "failed to save UI screenshot");
+            check(greenPixels > 30, "vector editor rendering missed the green dial");
             std::printf("UI render pass: %dx%d, %d green pixels\n", width, height, greenPixels);
         }
     }
