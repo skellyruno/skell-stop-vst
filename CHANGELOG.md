@@ -7,6 +7,8 @@
 - Resolve shadowed editor identifiers, accidental float-to-integer text rectangles,
   and implicit numerical conversions in controls and DSP.
 - Enforce strict, warning-free native C++ regression builds on Clang/GCC/MSVC.
+- Correct the host test's conflicting JUCE standalone macro at target creation,
+  and explicitly convert the remaining UI integer coordinates to floats.
 - Remove an unreadable waveform annotation under the lock crescent and use a
   more restrained loop-region tint.
 

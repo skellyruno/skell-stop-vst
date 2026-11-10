@@ -37,8 +37,8 @@ void DialComponent::BezelLayer::paint(juce::Graphics& g)
     // Soft multi-pass shadow and bevel, all drawn from vector geometry.
     for (int i = 17; i > 0; --i)
     {
-        g.setColour(juce::Colours::black.withAlpha(0.004f + 0.009f * (17 - i) / 17.0f));
-        const float r = 251.0f + i * 0.72f;
+        g.setColour(juce::Colours::black.withAlpha(0.004f + 0.009f * static_cast<float>(17 - i) / 17.0f));
+        const float r = 251.0f + static_cast<float>(i) * 0.72f;
         g.fillEllipse(dialCentre.x - r + 3.0f, dialCentre.y - r + 11.0f, 2.0f * r, 2.0f * r);
     }
     g.setColour(juce::Colour(0xff17181b));
@@ -137,7 +137,7 @@ void DialComponent::OverlayLayer::paint(juce::Graphics& g)
         // Cheap vector glow: broad transparent strokes under the solid arc.
         for (int i = 15; i >= 1; i -= 3)
         {
-            g.setColour(Theme::green.withAlpha(0.014f + (15 - i) * 0.0018f));
+            g.setColour(Theme::green.withAlpha(0.014f + static_cast<float>(15 - i) * 0.0018f));
             g.strokePath(path, juce::PathStrokeType(20.0f + static_cast<float>(i) * 1.9f,
                 juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
         }
@@ -269,7 +269,7 @@ void DialComponent::mouseDrag(const juce::MouseEvent& e)
     const float x = toBaseX(e.position.x), y = toBaseY(e.position.y);
     if (dragging == Dragging::lockAmount)
     {
-        const float delta = -e.getDistanceFromDragStartY() / std::max(1.0f, static_cast<float>(getHeight()) / sz);
+        const float delta = -static_cast<float>(e.getDistanceFromDragStartY()) / std::max(1.0f, static_cast<float>(getHeight()) / sz);
         setLockAmount(dragStartLock + delta * (Theme::fineAdjust(e.mods) ? 0.025f : 0.17f));
     }
     else if (dragging == Dragging::amount)

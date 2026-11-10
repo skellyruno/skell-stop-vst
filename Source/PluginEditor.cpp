@@ -55,8 +55,8 @@ void StopDialAudioProcessorEditor::Backdrop::paint(juce::Graphics& g)
     g.setColour(Theme::text.withAlpha(0.8f));
     for (int i = 0; i < 3; ++i)
     {
-        const float xx = 629.0f + 9.0f * i;
-        g.drawEllipse(xx, 21.0f + 3.5f * i, 12.0f, 12.0f, 1.7f);
+        const float xx = 629.0f + 9.0f * static_cast<float>(i);
+        g.drawEllipse(xx, 21.0f + 3.5f * static_cast<float>(i), 12.0f, 12.0f, 1.7f);
     }
     g.setColour(Theme::muted);
     g.setFont(Theme::font(13.2f));
