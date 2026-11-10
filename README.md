@@ -8,6 +8,12 @@ dial now shows exact stop depth, plus contextual wheel, keyboard, and reset
 controls. All existing APVTS parameter IDs and preset state keys are preserved.
 
 
+v2.3.1 adds actual JUCE processor/editor integration checks across multiple
+sample rates, block sizes, and UI dimensions; the Linux DSP tests run with
+sanitizers and strict compiler warnings. Windows/macOS VST3 and Standalone
+builds are validated by GitHub Actions. FL Studio host loading and listening
+tests remain separate acceptance checks.
+
 StopDial is a vector-drawn stereo/mono tape-stop and rhythmic looping effect.
 The plugin uses original Skell Audio branding, a 725 × 892 fixed-aspect-ratio
 interface, and stable original APVTS parameter IDs for compatibility with
@@ -84,7 +90,7 @@ or `~/Library/Audio/Plug-Ins/VST3` on macOS.
 - **Waveform green handles:** drag either edge of the selected slice; the
   waveform now highlights handles on hover and shows a moving orange tape/loop
   playhead. Double-click a handle to restore the original marker positions.
-  A subtle waiting-for-audio label distinguishes preview peaks from input.
+  Idle preview peaks are visually subdued; real input replaces them when available.
   Marker edits apply at the **next loop capture**, not to an already playing
   frozen slice, and are saved to the project state.
 
