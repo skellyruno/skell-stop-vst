@@ -1,4 +1,4 @@
-# StopDial v2.3 — JUCE VST3 + Standalone
+# StopDial v2.3.1 — JUCE VST3 + Standalone
 
 v2.2 refines the vector UI and makes loop-pattern changes safer on audio:
 bounded cubic interpolation is now used for captured/live loop slices, the

@@ -1,14 +1,23 @@
 cmake_minimum_required(VERSION 3.22)
-project(StopDial VERSION 2.3.0 LANGUAGES C CXX)
+project(StopDial VERSION 2.3.1 LANGUAGES C CXX)
 
 # Dependency-free, fast DSP regression build for machines without the JUCE SDK.
 option(STOPDIAL_MATH_ONLY "Build native DSP tests without fetching JUCE" OFF)
 option(STOPDIAL_ENABLE_SANITIZERS "Enable ASan/UBSan on native DSP tests (Linux)" OFF)
 option(STOPDIAL_PROFILE_DSP "Build optional no-JUCE Modern coefficient microbenchmark" OFF)
+# Treat native math regression warnings as errors on supported compilers.
+function(stopdial_strict_test_warnings target)
+    if(MSVC)
+        target_compile_options(${target} PRIVATE /W4 /WX)
+    elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
+        target_compile_options(${target} PRIVATE -Wall -Wextra -Wconversion -Wsign-conversion -Wshadow -Werror)
+    endif()
+endfunction()
 if(STOPDIAL_MATH_ONLY)
     enable_testing()
     add_executable(StopDialDSPTests tests/stopdial_math_tests.cpp)
     target_compile_features(StopDialDSPTests PRIVATE cxx_std_17)
+    stopdial_strict_test_warnings(StopDialDSPTests)
     if(STOPDIAL_ENABLE_SANITIZERS AND CMAKE_SYSTEM_NAME STREQUAL "Linux")
         target_compile_options(StopDialDSPTests PRIVATE -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer)
         target_link_options(StopDialDSPTests PRIVATE -fsanitize=address,undefined)
@@ -82,6 +91,7 @@ if(STOPDIAL_BUILD_TESTS)
     enable_testing()
     add_executable(StopDialDSPTests tests/stopdial_math_tests.cpp)
     target_compile_features(StopDialDSPTests PRIVATE cxx_std_17)
+    stopdial_strict_test_warnings(StopDialDSPTests)
     add_test(NAME StopDialDSPTests COMMAND StopDialDSPTests)
 
     # Full signal-chain/UI smoke tests, not a second implementation of the DSP.

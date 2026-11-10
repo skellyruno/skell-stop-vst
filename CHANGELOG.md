@@ -1,5 +1,16 @@
 # StopDial changelog
 
+## 2.3.1 — Cross-platform render and warning fixes
+
+- Release offscreen JUCE graphics contexts before reading pixels on Windows.
+- Keep original UI pixel assertions and save full/isolated renders at three sizes.
+- Resolve shadowed editor identifiers, accidental float-to-integer text rectangles,
+  and implicit numerical conversions in controls and DSP.
+- Enforce strict, warning-free native C++ regression builds on Clang/GCC/MSVC.
+- Remove an unreadable waveform annotation under the lock crescent and use a
+  more restrained loop-region tint.
+
+
 ## 2.3.0 — Host-level DSP/UI verification and precision UX
 
 - Add a JUCE-linked host integration test that runs the actual processor across sample

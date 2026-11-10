@@ -95,7 +95,7 @@ namespace
                         const float high = std::max(std::max(prev, a), std::max(b, next));
                         for (int i = 0; i <= 200; ++i)
                         {
-                            const float frac = i * (1.0f / 200.0f);
+                            const float frac = static_cast<float>(i) * (1.0f / 200.0f);
                             const float sample = StopDialMath::boundedHermite(prev, a, b, next, frac);
                             assert(std::isfinite(sample));
                             assert(sample >= low - 1e-6f && sample <= high + 1e-6f);
@@ -105,7 +105,7 @@ namespace
                     }
         // Linearity and constant regions must survive the overshoot clamp.
         for (int step = 0; step <= 100; ++step)
-            assert(near(StopDialMath::boundedHermite(-1, 0, 1, 2, step * 0.01f),
+            assert(near(StopDialMath::boundedHermite(-1, 0, 1, 2, static_cast<float>(step) * 0.01f),
                         step * 0.01, 1e-5));
     }
 
@@ -138,7 +138,8 @@ namespace
         const float pole = 0.998f;
         for (int i = 0; i < 10000; ++i)
         {
-            const float x = 0.6f * std::sin(i * 0.018f) + 0.2f * std::cos(i * 0.04f);
+            const float x = 0.6f * std::sin(static_cast<float>(i) * 0.018f)
+                          + 0.2f * std::cos(static_cast<float>(i) * 0.04f);
             // At speed 1, no high-pass or saturation should colour bass.
             const float y = tone.process(x, 1.0f, 0.8f, pole);
             assert(near(x, y, 1e-6));
@@ -248,7 +249,7 @@ namespace
         assert(near(StopDialMath::splice(1.0f, 1.0f, 0.5f), 1.0f));
         for (int i = 0; i <= 1000; ++i)
         {
-            const float t = i / 1000.0f;
+            const float t = static_cast<float>(i) / 1000.0f;
             const auto y = StopDialMath::splice(0.8f, 0.8f, t);
             assert(near(y, 0.8f));  // no +3 dB correlation bump
             assert(StopDialMath::smoothFade(t) >= 0.0f);
@@ -262,11 +263,12 @@ namespace
         std::array<float, size> ring {};
         std::array<float, loopSize + 6> clip {};
         for (int i = 0; i < size; ++i)
-            ring[i] = std::sin(i * 0.29f) + 0.16f * std::sin(i * 1.29f);
+            ring[static_cast<size_t>(i)] = std::sin(static_cast<float>(i) * 0.29f)
+                + 0.16f * std::sin(static_cast<float>(i) * 1.29f);
         for (int i = 0; i < loopSize + 6; ++i)
         {
             const int idx = StopDialMath::wrapLoopIndex(i - 2, loopSize);
-            clip[i] = ring[(start + idx) % size];
+            clip[static_cast<size_t>(i)] = ring[static_cast<size_t>((start + idx) % size)];
         }
         assert(StopDialMath::wrapLoopIndex(-1, loopSize) == loopSize - 1);
         assert(StopDialMath::wrapLoopIndex(-2, loopSize) == loopSize - 2);
@@ -279,14 +281,15 @@ namespace
         {
             for (int q = 0; q < 10; ++q)
             {
-                const float t = q / 10.0f;
+                const float t = static_cast<float>(q) / 10.0f;
                 const auto liveSample = [&](int rel) {
-                    return ring[(start + StopDialMath::wrapLoopIndex(rel, loopSize)) % size];
+                    return ring[static_cast<size_t>((start + StopDialMath::wrapLoopIndex(rel, loopSize)) % size)];
                 };
                 const auto expected = StopDialMath::boundedHermite(
                     liveSample(i - 1), liveSample(i), liveSample(i + 1), liveSample(i + 2), t);
                 const auto actual = StopDialMath::boundedHermite(
-                    clip[i + 1], clip[i + 2], clip[i + 3], clip[i + 4], t);
+                    clip[static_cast<size_t>(i + 1)], clip[static_cast<size_t>(i + 2)],
+                    clip[static_cast<size_t>(i + 3)], clip[static_cast<size_t>(i + 4)], t);
                 assert(near(actual, expected, 1e-6));
             }
         }
@@ -303,10 +306,10 @@ namespace
             {
                 for (int endPct = startPct + 5; endPct <= 100; endPct += 5)
                 {
-                    const float a = startPct * 0.01f;
-                    const float b = endPct * 0.01f;
-                    const int length = std::clamp(static_cast<int>(total * (b - a)), 16, total);
-                    const int first = std::clamp(static_cast<int>(total * a), 0, total - length);
+                    const float a = static_cast<float>(startPct) * 0.01f;
+                    const float b = static_cast<float>(endPct) * 0.01f;
+                    const int length = std::clamp(static_cast<int>(static_cast<float>(total) * (b - a)), 16, total);
+                    const int first = std::clamp(static_cast<int>(static_cast<float>(total) * a), 0, total - length);
                     assert(first >= 0 && first + length <= total);
                     for (int i = 0; i < length + 6; ++i)
                     {
@@ -363,7 +366,7 @@ namespace
         // not create the old two-fade volume dip.
         for (int i = 0; i <= length; ++i)
         {
-            const float gain = StopDialMath::transitionGain(i / static_cast<float>(length));
+            const float gain = StopDialMath::transitionGain(static_cast<float>(i) / static_cast<float>(length));
             const float sameDC = slowEnd + (slowEnd - slowEnd) * gain;
             assert(near(sameDC, slowEnd));
         }
@@ -396,7 +399,7 @@ namespace
         std::array<float, size> ring {};
         std::array<float, size> clip {};
         for (int i = 0; i < size; ++i)
-            ring[i] = static_cast<float>(std::sin(i * 0.07));
+            ring[static_cast<size_t>(i)] = static_cast<float>(std::sin(i * 0.07));
         int copy = 0;
         // Simulate continuous input and bounded snapshot copying.
         // The writer begins well ahead of the material being preserved.
@@ -406,15 +409,15 @@ namespace
             for (int step = 0; step < 8 && copy < loopSize + 6; ++step)
             {
                 const int src = (start + StopDialMath::wrapLoopIndex(copy - 2, loopSize)) % size;
-                clip[copy] = ring[src];
+                clip[static_cast<size_t>(copy)] = ring[static_cast<size_t>(src)];
                 ++copy;
             }
-            ring[write] = 0.0f;
+            ring[static_cast<size_t>(write)] = 0.0f;
             write = (write + 1) % size;
         }
         // In this test the old source region is not yet overwritten.
         for (int i = 0; i < loopSize + 6; ++i)
-            assert(near(clip[i], static_cast<float>(std::sin(
+            assert(near(clip[static_cast<size_t>(i)], static_cast<float>(std::sin(
                 ((start + StopDialMath::wrapLoopIndex(i - 2, loopSize)) % size) * 0.07))));
         ring.fill(0.0f);
         assert(!near(clip[100], 0.0f)); // frozen loop survives ongoing capture
