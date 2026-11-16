@@ -60,7 +60,7 @@ juce_add_plugin(StopDial
     IS_MIDI_EFFECT FALSE
     EDITOR_WANTS_KEYBOARD_FOCUS TRUE
     COPY_PLUGIN_AFTER_BUILD FALSE
-    FORMATS VST3 Standalone)
+    FORMATS VST3)
 
 juce_generate_juce_header(StopDial)
 
