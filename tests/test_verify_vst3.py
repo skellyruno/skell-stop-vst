@@ -87,6 +87,22 @@ class VerifyVst3Tests(unittest.TestCase):
             with self.assertRaisesRegex(VerificationError, "metadata"):
                 verify_bundle(bundle)
 
+    def test_accepts_steinberg_json5_trailing_commas(self):
+        with tempfile.TemporaryDirectory() as temp:
+            bundle = self.make_bundle(Path(temp))
+            text = json.dumps(json.loads(moduleinfo()), indent=2)
+            text = text.replace("\n  }", ",\n  }").replace("\n  ]", ",\n  ]")
+            text = text[:-1] + ",\n}"
+            (bundle / MODULEINFO).write_text(text, encoding="utf-8")
+            self.assertTrue(verify_bundle(bundle)["verified"])
+
+    def test_rejects_malformed_steinberg_json5_metadata(self):
+        with tempfile.TemporaryDirectory() as temp:
+            bundle = self.make_bundle(Path(temp))
+            (bundle / MODULEINFO).write_text('{"Name" "StopDial"}', encoding="utf-8")
+            with self.assertRaisesRegex(VerificationError, "moduleinfo.json"):
+                verify_bundle(bundle)
+
     def test_rejects_wrong_product_name(self):
         with tempfile.TemporaryDirectory() as temp:
             bundle = self.make_bundle(Path(temp))

@@ -77,6 +77,12 @@ jobs:
           if ($LASTEXITCODE -ne 0) {
             throw "StopDial Windows VST3 package verification failed"
           }
+      - name: Validate packaged VST3 with pluginval
+        uses: Tracktion/pluginval/validate@v2.0.0-beta3
+        with:
+          plugins: package/StopDial.vst3
+          strictness-level: 5
+          pluginval-version: v2.0.0-beta3
       - name: Preserve offscreen UI renders
         if: always()
         uses: actions/upload-artifact@v4

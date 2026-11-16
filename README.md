@@ -298,3 +298,6 @@ working directory. It exercises known audio, retrigger, Loop and Modern modes,
 resume, pattern automation, invalid input, latency and saved-state round trips.
 The CPU ratio printed by the host test is a smoke-test measurement, not a DAW
 benchmark; host hardware and DAW scheduling can change it substantially.
+
+
+The release verifier accepts only the trailing-comma extension emitted by Steinberg's official JSON5 writer; malformed metadata still fails closed. The Windows workflow runs pluginval strictness 5 before the VST3 artifact is uploaded.

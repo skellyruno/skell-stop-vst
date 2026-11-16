@@ -54,11 +54,47 @@ def _validate_pe32_plus_amd64(data: bytes) -> None:
         )
 
 
+def _strip_steinberg_json5_trailing_commas(source: str) -> str:
+    """Remove only trailing commas emitted by Steinberg's official JSON5Writer."""
+    output: list[str] = []
+    in_string = False
+    escaped = False
+    index = 0
+    while index < len(source):
+        char = source[index]
+        if in_string:
+            output.append(char)
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == '"':
+                in_string = False
+            index += 1
+            continue
+        if char == '"':
+            in_string = True
+            output.append(char)
+            index += 1
+            continue
+        if char == ",":
+            lookahead = index + 1
+            while lookahead < len(source) and source[lookahead].isspace():
+                lookahead += 1
+            if lookahead < len(source) and source[lookahead] in "}]":
+                index += 1
+                continue
+        output.append(char)
+        index += 1
+    return "".join(output)
+
+
 def _validate_moduleinfo(raw: bytes) -> tuple[str, str]:
     try:
-        info = json.loads(raw.decode("utf-8-sig"))
+        source = raw.decode("utf-8-sig")
+        info = json.loads(_strip_steinberg_json5_trailing_commas(source))
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-        raise VerificationError(f"moduleinfo.json is not valid UTF-8 JSON: {exc}") from exc
+        raise VerificationError(f"moduleinfo.json is not valid UTF-8/Steinberg JSON5 metadata: {exc}") from exc
     if not isinstance(info, dict):
         raise VerificationError("moduleinfo.json root must be a JSON object")
 
