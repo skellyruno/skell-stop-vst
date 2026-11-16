@@ -110,10 +110,21 @@ class VerifyVst3Tests(unittest.TestCase):
 
     def test_rejects_case_colliding_paths(self):
         with tempfile.TemporaryDirectory() as temp:
-            bundle = self.make_bundle(Path(temp))
-            (bundle / "Contents/Resources/MODULEINFO.JSON").write_bytes(moduleinfo())
+            root = Path(temp)
+            bundle = self.make_bundle(root)
+            archive_path = root / "case-collision.zip"
+            # Windows paths are case-insensitive, so preserve both spellings
+            # as ZIP entries rather than trying to create colliding files on disk.
+            with zipfile.ZipFile(archive_path, "w") as archive:
+                for item in bundle.rglob("*"):
+                    if item.is_file():
+                        archive.write(item, f"{BUNDLE}/{item.relative_to(bundle).as_posix()}")
+                archive.writestr(
+                    f"{BUNDLE}/Contents/Resources/MODULEINFO.JSON",
+                    moduleinfo(),
+                )
             with self.assertRaisesRegex(VerificationError, "case-colliding"):
-                verify_bundle(bundle)
+                verify_bundle(archive_path)
 
     def test_rejects_archive_path_traversal(self):
         with tempfile.TemporaryDirectory() as temp:
