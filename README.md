@@ -1,4 +1,4 @@
-# StopDial v2.3.1 — JUCE VST3 + Standalone
+# StopDial v2.3.1 — Windows VST3
 
 v2.2 refines the vector UI and makes loop-pattern changes safer on audio:
 bounded cubic interpolation is now used for captured/live loop slices, the
@@ -10,8 +10,8 @@ controls. All existing APVTS parameter IDs and preset state keys are preserved.
 
 v2.3.1 adds actual JUCE processor/editor integration checks across multiple
 sample rates, block sizes, and UI dimensions; the Linux DSP tests run with
-sanitizers and strict compiler warnings. Windows/macOS VST3 and Standalone
-builds are validated by GitHub Actions. FL Studio host loading and listening
+sanitizers and strict compiler warnings. The release workflow builds and
+packages one Windows x64 VST3 bundle only. FL Studio host loading and listening
 tests remain separate acceptance checks.
 
 StopDial is a vector-drawn stereo/mono tape-stop and rhythmic looping effect.
@@ -25,8 +25,8 @@ without renaming or removing existing parameters.
 - **JUCE:** 7+ compatible design; CMake currently fetches JUCE **8.0.12** if
   `JUCE_PATH` is not set. The machine configuring CMake needs Git/network
   access to fetch JUCE, or a local JUCE checkout.
-- **Windows:** MSVC via Visual Studio 2022/2026 (x64), CMake 3.22+, Windows SDK.
-- **macOS:** Xcode/Clang, CMake 3.22+.
+- **Release target:** Windows x64 VST3 only.
+- **Toolchain:** MSVC via Visual Studio 2022/2026 (x64), CMake 3.22+, Windows SDK.
 
 Windows PowerShell:
 
@@ -36,28 +36,22 @@ cmake --build build --config Release --parallel 2
 ctest --test-dir build -C Release --output-on-failure
 ```
 
-macOS:
-
-```sh
-cmake -S . -B build -G Xcode -DJUCE_PATH="$HOME/JUCE"
-cmake --build build --config Release --parallel 3
-ctest --test-dir build -C Release --output-on-failure
-```
-
 If JUCE is not local, omit `-DJUCE_PATH=...` and configure with network access.
-The GitHub Actions workflow produces Windows and macOS artifacts and runs the
-native C++ regression tests after compilation.
+The GitHub Actions workflow runs the Linux sanitizer-backed DSP tests and the
+Windows JUCE regression suite, then stages and verifies one installable VST3 bundle.
 
 Usual outputs:
 
-| Platform | VST3 | Standalone |
-| --- | --- | --- |
-| Windows | `build/StopDial_artefacts/Release/VST3/StopDial.vst3` | `build/StopDial_artefacts/Release/Standalone/StopDial.exe` |
-| macOS | `build/StopDial_artefacts/Release/VST3/StopDial.vst3` | `build/StopDial_artefacts/Release/Standalone/StopDial.app` |
+| Release target | Bundle |
+| --- | --- |
+| Windows x64 | `build/StopDial_artefacts/Release/VST3/StopDial.vst3` |
 
-The location can differ across JUCE generators; search `build` for `StopDial.vst3`.
-Copy the VST3 bundle to `C:\Program Files\Common Files\VST3` on Windows,
-or `~/Library/Audio/Plug-Ins/VST3` on macOS.
+The location can differ across JUCE generators; the release workflow requires
+exactly one `StopDial.vst3` bundle and verifies its PE32+ AMD64 module before
+upload. The Actions artifact `StopDial-Windows-x64-VST3` contains the bundle at
+the artifact root plus `release-manifest.json`; there is no nested product ZIP
+or Standalone executable. Copy the `StopDial.vst3` directory to
+`C:\Program Files\Common Files\VST3` on Windows.
 
 ## Controls
 
@@ -190,8 +184,7 @@ ctest --test-dir build-math --output-on-failure
 ```
 
 On Linux, add `-DSTOPDIAL_ENABLE_SANITIZERS=ON` for AddressSanitizer
-and UndefinedBehaviorSanitizer. A dedicated Linux CI job now runs these tests
-before Windows/macOS plugin builds.
+and UndefinedBehaviorSanitizer. A dedicated Linux CI job runs these tests before the Windows x64 VST3 build.
 
 ### Manual DAW tests still required
 
