@@ -2,15 +2,34 @@ name: Build StopDial
 
 on:
   workflow_dispatch:
+  pull_request:
+    branches:
+      - main
+      - release/stopdial-vst3-only-20261115
+    paths:
+      - "CMakeLists.txt"
+      - ".github/workflows/build.yml"
+      - "scripts/**"
+      - "tests/**"
+      - "Source/**"
   push:
-    branches: [main, master]
+    branches:
+      - main
+      - master
+      - release/stopdial-vst3-only-20261115
+      - release/stopdial-vst3-package-guard-20261116
 
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   dsp-regression:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - name: Configure sanitizer-enabled native DSP tests
@@ -22,69 +41,54 @@ jobs:
 
   windows:
     runs-on: windows-latest
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
-      - name: Configure
-        run: cmake -S . -B build -A x64
-      - name: Build StopDial
-        run: cmake --build build --config Release --parallel 2
-      - name: Run regression tests
-        run: ctest --test-dir build -C Release --output-on-failure
-      - name: Preserve offscreen UI renders
-        if: always()
-        uses: actions/upload-artifact@v4
+      - uses: actions/setup-python@v5
         with:
-          name: StopDial-UI-${{ runner.os }}
-          path: build/StopDial-*.png
-          if-no-files-found: ignore
-          retention-days: 1
-      - name: Package VST3 and Standalone
+          python-version: "3.11"
+      - name: Configure Windows x64 VST3 and regression tests
+        run: cmake -S . -B build -A x64 -DSTOPDIAL_BUILD_TESTS=ON
+      - name: Build StopDial VST3
+        run: cmake --build build --config Release --parallel 2
+      - name: Run JUCE DSP and host regression tests
+        run: ctest --test-dir build -C Release --output-on-failure
+      - name: Test fail-closed package verifier
+        run: python -m unittest discover -s tests -p "test_verify_vst3.py" -v
+      - name: Stage and verify one Windows VST3 bundle
         shell: pwsh
         run: |
-          $vst = Get-ChildItem build -Recurse -Directory -Filter "StopDial.vst3" | Select-Object -First 1
-          if (-not $vst) { throw "StopDial.vst3 bundle not found" }
-          $standalone = Get-ChildItem build -Recurse -File -Filter "StopDial.exe" | Select-Object -First 1
-          New-Item -ItemType Directory -Path package -Force | Out-Null
-          Copy-Item -Recurse $vst.FullName package/
-          if (-not $standalone) { throw "StopDial standalone EXE not found" }
-          Copy-Item $standalone.FullName package/
-          Compress-Archive package/* StopDial-Windows.zip
-      - uses: actions/upload-artifact@v4
-        with:
-          retention-days: 1
-          name: StopDial-Windows
-          path: StopDial-Windows.zip
-          if-no-files-found: error
-
-  macos:
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Configure
-        run: cmake -S . -B build -G Xcode
-      - name: Build StopDial
-        run: cmake --build build --config Release --parallel 3
-      - name: Run regression tests
-        run: ctest --test-dir build -C Release --output-on-failure
+          $bundles = @(Get-ChildItem -Path build -Recurse -Directory -Filter "StopDial.vst3" -ErrorAction SilentlyContinue)
+          if ($bundles.Count -ne 1) {
+            throw "Expected exactly one StopDial.vst3 bundle, found $($bundles.Count)"
+          }
+          $standalones = @(Get-ChildItem -Path build -Recurse -File -Filter "StopDial.exe" -ErrorAction SilentlyContinue)
+          if ($standalones.Count -ne 0) {
+            throw "VST3-only build unexpectedly produced StopDial.exe"
+          }
+          $packageRoot = Join-Path $PWD "package"
+          New-Item -ItemType Directory -Path $packageRoot -Force | Out-Null
+          Copy-Item -LiteralPath $bundles[0].FullName -Destination $packageRoot -Recurse
+          $bundlePath = Join-Path $packageRoot "StopDial.vst3"
+          if (-not (Test-Path -LiteralPath $bundlePath -PathType Container)) {
+            throw "Staged StopDial.vst3 bundle is missing"
+          }
+          python scripts/verify_vst3.py $bundlePath --manifest-out (Join-Path $packageRoot "release-manifest.json") --source-commit "${{ github.sha }}"
+          if ($LASTEXITCODE -ne 0) {
+            throw "StopDial Windows VST3 package verification failed"
+          }
       - name: Preserve offscreen UI renders
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: StopDial-UI-${{ runner.os }}
+          name: StopDial-UI-Windows
           path: build/StopDial-*.png
           if-no-files-found: ignore
-          retention-days: 1
-      - name: Package VST3 and Standalone
-        run: |
-          mkdir -p package
-          find build -name StopDial.vst3 -type d -exec cp -R '{}' package/ \;
-          find build -name StopDial.app -type d -exec cp -R '{}' package/ \;
-          test -d package/StopDial.vst3
-          test -d package/StopDial.app
-          ditto -c -k --sequesterRsrc package StopDial-macOS.zip
-      - uses: actions/upload-artifact@v4
+          retention-days: 7
+      - name: Upload installable VST3 bundle and provenance manifest
+        uses: actions/upload-artifact@v4
         with:
-          retention-days: 1
-          name: StopDial-macOS
-          path: StopDial-macOS.zip
+          name: StopDial-Windows-x64-VST3
+          path: package/
           if-no-files-found: error
+          retention-days: 7
