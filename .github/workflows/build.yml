@@ -90,7 +90,7 @@ jobs:
           $packageRoot = Join-Path $PWD "package"
           $files = @(Get-ChildItem -LiteralPath $packageRoot -Recurse -File | Sort-Object FullName)
           $lines = foreach ($file in $files) {
-            $relative = $file.FullName.Substring($packageRoot.Length).TrimStart('\\','/').Replace('\\','/')
+            $relative = $file.FullName.Substring($packageRoot.Length).TrimStart([char[]]@('\','/')).Replace('\','/')
             $hash = (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
             "$hash  $relative"
           }
