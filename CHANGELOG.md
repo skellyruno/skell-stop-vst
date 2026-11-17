@@ -1,5 +1,16 @@
 # StopDial changelog
 
+## Unreleased — Safe Windows install and rollback
+
+- Add a checksum-verified PowerShell install/update helper with `-WhatIf`,
+  pre-replacement backups, staged replacement and post-install verification.
+- Add explicit rollback from a selected backup while preserving the version
+  being replaced; no registry edits, self-elevation or background updates.
+- Include the helper and install instructions in the Windows VST3 preview,
+  checksum every package file, test install/upgrade/rollback in CI, and retain
+  the preview artifact for 30 days.
+
+
 ## 2.3.1 — Cross-platform render and warning fixes
 
 - Release offscreen JUCE graphics contexts before reading pixels on Windows.
