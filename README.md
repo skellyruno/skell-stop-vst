@@ -58,15 +58,15 @@ Close FL Studio or any other DAW before replacing a loaded plugin. Extract the
 complete artifact ZIP and keep its files together. Preview first, then install:
 
 ```powershell
-.\\Install-StopDial.ps1 -PackageRoot . -WhatIf
-.\\Install-StopDial.ps1 -PackageRoot .
+.\Install-StopDial.ps1 -PackageRoot . -WhatIf
+.\Install-StopDial.ps1 -PackageRoot .
 ```
 
 The helper verifies the package checksum list, release manifest, StopDial
 processor/controller metadata, AMD64 PE32+ module and bundle contents. If an
 older StopDial is present, it creates and verifies a timestamped backup before
 replacing the bundle. The default destination is
-`C:\\Program Files\\Common Files\\VST3`; if Windows denies write access,
+`C:\Program Files\Common Files\VST3`; if Windows denies write access,
 run PowerShell as Administrator. The helper does not elevate itself, modify
 the registry or change DAW settings.
 
@@ -74,7 +74,7 @@ The install command prints `backup_path` when it replaces an existing version.
 Keep that folder and use its exact path to roll back:
 
 ```powershell
-.\\Install-StopDial.ps1 -RollbackFrom "C:\\Users\\you\\AppData\\Local\\Skelly\\StopDial\\Backups\\StopDial-..."
+.\Install-StopDial.ps1 -RollbackFrom "C:\Users\you\AppData\Local\Skelly\StopDial\Backups\StopDial-..."
 ```
 
 Rollback backs up the currently installed bundle before restoring the selected
