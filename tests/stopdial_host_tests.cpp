@@ -112,6 +112,9 @@ namespace
     void exerciseProcessor(double rate, int block)
     {
         StopDialAudioProcessor p;
+        check(p.getNumPrograms() == 1, "host program count changed");
+        check(p.getProgramName(0).isNotEmpty(),
+              "VST3 default program name must not be empty");
         p.setPlayConfigDetails(2, 2, rate, std::max(block, 1024));
         p.prepareToPlay(rate, std::max(block, 1024));
         check(p.getLatencySamples() == 0, "host latency contract changed");
