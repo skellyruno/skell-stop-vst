@@ -73,7 +73,7 @@ jobs:
           if (-not (Test-Path -LiteralPath $bundlePath -PathType Container)) {
             throw "Staged StopDial.vst3 bundle is missing"
           }
-          python scripts/verify_vst3.py $bundlePath --manifest-out (Join-Path $packageRoot "release-manifest.json") --source-commit "${{ github.sha }}"
+          python scripts/verify_vst3.py $bundlePath --manifest-out (Join-Path $packageRoot "release-manifest.json") --source-commit "${{ github.event.pull_request.head.sha || github.sha }}"
           if ($LASTEXITCODE -ne 0) {
             throw "StopDial Windows VST3 package verification failed"
           }
