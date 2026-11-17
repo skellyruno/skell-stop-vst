@@ -230,11 +230,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("artifact", type=Path, help="StopDial.vst3 directory or ZIP archive")
     parser.add_argument("--manifest-out", type=Path, help="Write a JSON provenance manifest")
     parser.add_argument("--source-commit", default="", help="Git commit SHA for this build")
+    parser.add_argument("--pr-head-commit", default="",
+                        help="PR branch head SHA when Actions builds a synthetic merge commit")
     args = parser.parse_args(argv)
 
     try:
         manifest = verify_bundle(args.artifact)
         manifest["source_commit"] = args.source_commit
+        manifest["pr_head_commit"] = args.pr_head_commit
         if args.manifest_out:
             args.manifest_out.parent.mkdir(parents=True, exist_ok=True)
             args.manifest_out.write_text(
