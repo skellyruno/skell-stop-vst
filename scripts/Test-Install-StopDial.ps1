@@ -102,7 +102,57 @@ try {
     Assert-Throws { & $installer -PackageRoot $badRoot -Vst3Directory $badTarget -BackupRoot (Join-Path $testRoot 'BadManifestBackups') } 'Installer accepted a manifest with an incorrect binary hash.'
     Assert-True (-not (Test-Path -LiteralPath $badTarget)) 'Bad manifest changed the destination.'
 
-    Write-Host 'StopDial install/upgrade/rollback tests: 18 assertions passed.'
+    function Copy-PackageFixture {
+        param([string]$Name)
+        $root = Join-Path $testRoot $Name
+        New-Item -ItemType Directory -Path $root -Force | Out-Null
+        foreach ($item in @(Get-ChildItem -LiteralPath $package -Force)) {
+            Copy-Item -LiteralPath $item.FullName -Destination $root -Recurse
+        }
+        $root
+    }
+    function Assert-PackageRejectedWithoutWrite {
+        param([string]$Root, [string]$Name)
+        $target = Join-Path $testRoot ($Name + '-VST3')
+        $backup = Join-Path $testRoot ($Name + '-Backups')
+        Assert-Throws {
+            & $installer -PackageRoot $Root -Vst3Directory $target -BackupRoot $backup
+        } "$Name package was not rejected."
+        Assert-True (-not (Test-Path -LiteralPath $target)) "$Name package changed the VST3 destination."
+        Assert-True (-not (Test-Path -LiteralPath $backup)) "$Name package created a backup before validation."
+    }
+
+    $duplicateInfoRoot = Copy-PackageFixture -Name 'DuplicateModuleinfoPackage'
+    $duplicateInfoPath = Join-Path $duplicateInfoRoot 'StopDial.vst3\Contents\Resources\moduleinfo.json'
+    $duplicateInfo = Get-Content -LiteralPath $duplicateInfoPath -Raw
+    $nameMatch = [regex]::Match($duplicateInfo, '"Name"\s*:\s*"StopDial"')
+    if (-not $nameMatch.Success) { throw 'Duplicate moduleinfo fixture could not find the product name.' }
+    $duplicateInfo = $duplicateInfo.Insert($nameMatch.Index + $nameMatch.Length, ', "Name": "StopDial"')
+    Set-Content -LiteralPath $duplicateInfoPath -Value $duplicateInfo -NoNewline -Encoding UTF8
+    Write-PackageChecksums -Root $duplicateInfoRoot
+    Assert-PackageRejectedWithoutWrite -Root $duplicateInfoRoot -Name 'DuplicateModuleinfo'
+
+    $duplicateManifestRoot = Copy-PackageFixture -Name 'DuplicateManifestPackage'
+    $duplicateManifestPath = Join-Path $duplicateManifestRoot 'release-manifest.json'
+    $duplicateManifest = Get-Content -LiteralPath $duplicateManifestPath -Raw
+    $productMatch = [regex]::Match($duplicateManifest, '"product"\s*:\s*"StopDial"')
+    if (-not $productMatch.Success) { throw 'Duplicate manifest fixture could not find the product field.' }
+    $duplicateManifest = $duplicateManifest.Insert($productMatch.Index + $productMatch.Length, ', "product": "StopDial"')
+    Set-Content -LiteralPath $duplicateManifestPath -Value $duplicateManifest -NoNewline -Encoding UTF8
+    Write-PackageChecksums -Root $duplicateManifestRoot
+    Assert-PackageRejectedWithoutWrite -Root $duplicateManifestRoot -Name 'DuplicateManifest'
+
+    $overflowInfoRoot = Copy-PackageFixture -Name 'OverflowModuleinfoPackage'
+    $overflowInfoPath = Join-Path $overflowInfoRoot 'StopDial.vst3\Contents\Resources\moduleinfo.json'
+    $overflowInfo = Get-Content -LiteralPath $overflowInfoPath -Raw
+    $versionMatch = [regex]::Match($overflowInfo, '"Version"\s*:\s*"2\.3\.1"')
+    if (-not $versionMatch.Success) { throw 'Overflow moduleinfo fixture could not find the version field.' }
+    $overflowInfo = $overflowInfo.Insert($versionMatch.Index + $versionMatch.Length, ', "NumericProbe": 1e999')
+    Set-Content -LiteralPath $overflowInfoPath -Value $overflowInfo -NoNewline -Encoding UTF8
+    Write-PackageChecksums -Root $overflowInfoRoot
+    Assert-PackageRejectedWithoutWrite -Root $overflowInfoRoot -Name 'OverflowModuleinfo'
+
+    Write-Host 'StopDial install/upgrade/rollback and strict-metadata tests passed.'
 }
 finally {
     if (Test-Path -LiteralPath $testRoot) { Remove-Item -LiteralPath $testRoot -Recurse -Force -ErrorAction SilentlyContinue }

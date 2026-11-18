@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 import re
 import struct
 import sys
@@ -23,6 +24,29 @@ VERSION_RE = re.compile(r"^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$")
 
 class VerificationError(ValueError):
     """Raised when a package does not satisfy the release contract."""
+
+
+def _reject_duplicate_object_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    seen: set[str] = set()
+    for key, value in pairs:
+        folded = key.casefold()
+        if folded in seen:
+            raise VerificationError(f"Duplicate or case-colliding JSON object key: {key!r}")
+        seen.add(folded)
+        result[key] = value
+    return result
+
+
+def _reject_nonfinite_constant(value: str) -> None:
+    raise VerificationError(f"Non-standard non-finite JSON number is not allowed: {value}")
+
+
+def _parse_finite_float(value: str) -> float:
+    parsed = float(value)
+    if not math.isfinite(parsed):
+        raise VerificationError(f"JSON number overflows to a non-finite value: {value}")
+    return parsed
 
 
 def _field(mapping: dict[str, Any], *names: str) -> Any:
@@ -92,7 +116,12 @@ def _strip_steinberg_json5_trailing_commas(source: str) -> str:
 def _validate_moduleinfo(raw: bytes) -> tuple[str, str]:
     try:
         source = raw.decode("utf-8-sig")
-        info = json.loads(_strip_steinberg_json5_trailing_commas(source))
+        info = json.loads(
+            _strip_steinberg_json5_trailing_commas(source),
+            object_pairs_hook=_reject_duplicate_object_keys,
+            parse_constant=_reject_nonfinite_constant,
+            parse_float=_parse_finite_float,
+        )
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise VerificationError(f"moduleinfo.json is not valid UTF-8/Steinberg JSON5 metadata: {exc}") from exc
     if not isinstance(info, dict):

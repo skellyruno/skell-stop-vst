@@ -1,5 +1,13 @@
 # StopDial changelog
 
+## Unreleased — Strict metadata integrity
+
+- Reject duplicate and case-colliding JSON keys in VST3 module metadata,
+  release manifests and rollback backup manifests.
+- Reject NaN, Infinity and exponent values that overflow to non-finite numbers.
+- Add Python verifier and Windows PowerShell installer regressions proving
+  malformed package metadata is rejected before install or backup side effects.
+
 ## Unreleased — Safe Windows install and rollback
 
 - Add a checksum-verified PowerShell install/update helper with `-WhatIf`,

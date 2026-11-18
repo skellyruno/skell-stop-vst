@@ -63,7 +63,10 @@ complete artifact ZIP and keep its files together. Preview first, then install:
 ```
 
 The helper verifies the package checksum list, release manifest, StopDial
-processor/controller metadata, AMD64 PE32+ module and bundle contents. If an
+processor/controller metadata, AMD64 PE32+ module and bundle contents.
+It rejects duplicate or case-colliding JSON properties and non-finite numeric
+values in module metadata and manifests before creating backups or touching the
+installed VST3 bundle. If an
 older StopDial is present, it creates and verifies a timestamped backup before
 replacing the bundle. The default destination is
 `C:\Program Files\Common Files\VST3`; if Windows denies write access,

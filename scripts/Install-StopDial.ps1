@@ -20,7 +20,7 @@ if ([string]::IsNullOrWhiteSpace($BackupRoot)) {
 
 function Get-FullPath { param([string]$Path) [System.IO.Path]::GetFullPath($Path) }
 
-function ConvertFrom-SteinbergJson {
+function Remove-SteinbergTrailingCommas {
     param([string]$Source)
     $builder = New-Object System.Text.StringBuilder
     $inString = $false
@@ -50,9 +50,92 @@ function ConvertFrom-SteinbergJson {
         [void]$builder.Append($c)
         $i++
     }
-    $builder.ToString() | ConvertFrom-Json -ErrorAction Stop
+    $builder.ToString()
 }
 
+function Assert-NoDuplicateJsonProperties {
+    param([string]$Source)
+    $stack = New-Object 'System.Collections.Generic.List[object]'
+    $index = 0
+    while ($index -lt $Source.Length) {
+        $c = $Source[$index]
+        if ($c -eq '"') {
+            $start = $index
+            $index++
+            $escaped = $false
+            $closed = $false
+            while ($index -lt $Source.Length) {
+                $current = $Source[$index]
+                if ($escaped) { $escaped = $false }
+                elseif ($current -eq '\') { $escaped = $true }
+                elseif ($current -eq '"') { $closed = $true; break }
+                $index++
+            }
+            if (-not $closed) { throw 'Unterminated JSON string.' }
+            $raw = $Source.Substring($start, $index - $start + 1)
+            $after = $index + 1
+            while ($after -lt $Source.Length -and [char]::IsWhiteSpace($Source[$after])) { $after++ }
+            if ($after -lt $Source.Length -and $Source[$after] -eq ':' -and $stack.Count -gt 0) {
+                $scope = $stack[$stack.Count - 1]
+                if ($null -ne $scope) {
+                    $key = [string](ConvertFrom-Json -InputObject $raw -ErrorAction Stop)
+                    if (-not $scope.Add($key)) { throw "Duplicate or case-colliding JSON object key: $key" }
+                }
+            }
+            $index++
+            continue
+        }
+        if ($c -eq '{') {
+            $keys = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+            [void]$stack.Add($keys)
+        }
+        elseif ($c -eq '[') { [void]$stack.Add($null) }
+        elseif ($c -eq '}' -or $c -eq ']') {
+            if ($stack.Count -gt 0) { $stack.RemoveAt($stack.Count - 1) }
+        }
+        $index++
+    }
+}
+
+function Assert-FiniteJsonNumbers {
+    param([object]$Value)
+    if ($null -eq $Value) { return }
+    if ($Value -is [double]) {
+        if ([double]::IsNaN($Value) -or [double]::IsInfinity($Value)) {
+            throw 'JSON contains a non-finite or overflowing numeric value.'
+        }
+        return
+    }
+    if ($Value -is [single]) {
+        if ([single]::IsNaN($Value) -or [single]::IsInfinity($Value)) {
+            throw 'JSON contains a non-finite or overflowing numeric value.'
+        }
+        return
+    }
+    if ($Value -is [System.Collections.IDictionary]) {
+        foreach ($key in $Value.Keys) { Assert-FiniteJsonNumbers -Value $Value[$key] }
+        return
+    }
+    if ($Value -is [System.Array]) {
+        foreach ($item in $Value) { Assert-FiniteJsonNumbers -Value $item }
+        return
+    }
+    if ($Value -is [pscustomobject]) {
+        foreach ($property in $Value.PSObject.Properties) {
+            Assert-FiniteJsonNumbers -Value $property.Value
+        }
+    }
+}
+
+function ConvertFrom-StrictJson {
+    param([string]$Source, [switch]$AllowTrailingCommas)
+    $json = $Source
+    if ($AllowTrailingCommas) { $json = Remove-SteinbergTrailingCommas -Source $json }
+    Assert-NoDuplicateJsonProperties -Source $json
+    $value = ConvertFrom-Json -InputObject $json -ErrorAction Stop
+    Assert-FiniteJsonNumbers -Value $value
+    $value
+}
 function Get-StopDialTreeHash {
     param([string]$Path)
     $root = Get-FullPath $Path
@@ -91,7 +174,7 @@ function Get-StopDialBundleEvidence {
     $modules = @(Get-ChildItem -LiteralPath $bundle -Recurse -File -Filter '*.vst3')
     if ($modules.Count -ne 1 -or $modules[0].FullName -ne $binaryPath) { throw "Expected one x86_64-win VST3 module; found $($modules.Count)." }
 
-    $metadata = ConvertFrom-SteinbergJson -Source (Get-Content -LiteralPath $infoPath -Raw)
+    $metadata = ConvertFrom-StrictJson -Source (Get-Content -LiteralPath $infoPath -Raw) -AllowTrailingCommas
     if ($metadata.Name -ne 'StopDial') { throw "Unexpected product name: $($metadata.Name)" }
     $version = [string]$metadata.Version
     if ($version -notmatch '^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$') { throw "Invalid version: $version" }
@@ -165,7 +248,7 @@ function Get-ValidatedStopDialPackage {
 
     $manifestPath = Join-Path $rootPath 'release-manifest.json'
     if (-not (Test-Path -LiteralPath $manifestPath -PathType Leaf)) { throw 'Missing release-manifest.json.' }
-    $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json -ErrorAction Stop
+    $manifest = ConvertFrom-StrictJson -Source (Get-Content -LiteralPath $manifestPath -Raw)
     if ($manifest.verified -ne $true -or $manifest.product -ne 'StopDial' -or $manifest.format -ne 'VST3' -or $manifest.platform -ne 'windows-x64') {
         throw 'Release manifest does not describe a verified Windows x64 StopDial VST3.'
     }
@@ -261,7 +344,7 @@ function Invoke-StopDialRollback {
     $manifestPath = Join-Path $backupPath 'backup-manifest.json'
     $backupBundle = Join-Path $backupPath 'StopDial.vst3'
     if (-not (Test-Path -LiteralPath $manifestPath -PathType Leaf)) { throw 'Rollback backup is missing backup-manifest.json.' }
-    $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json -ErrorAction Stop
+    $manifest = ConvertFrom-StrictJson -Source (Get-Content -LiteralPath $manifestPath -Raw)
     if ($manifest.schema_version -ne 1 -or $manifest.product -ne 'StopDial') { throw 'Unsupported StopDial backup manifest.' }
     $backup = Get-StopDialBundleEvidence -BundlePath $backupBundle
     if ($backup.tree_sha256 -ne [string]$manifest.bundle_tree_sha256 -or $backup.binary_sha256 -ne [string]$manifest.binary_sha256 -or $backup.version -ne [string]$manifest.version) {
