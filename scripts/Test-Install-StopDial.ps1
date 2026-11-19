@@ -50,6 +50,17 @@ try {
     $missingLocalAppDataError = ''
     try { & $installer -PackageRoot $package -WhatIf | Out-Null } catch { $missingLocalAppDataError = $_.Exception.Message }
     Assert-True ($missingLocalAppDataError -like '*LOCALAPPDATA is required for the default per-user VST3 install path*') 'Installer did not fail closed when LOCALAPPDATA is unavailable.'
+
+    # The error message promises that an explicit custom VST3 directory remains usable
+    # even when the per-user environment variable is unavailable.
+    $overrideRoot = Join-Path ([System.IO.Path]::GetTempPath()) ('StopDial-Explicit-Override-' + [Guid]::NewGuid().ToString('N'))
+    $overrideBackup = Join-Path ([System.IO.Path]::GetTempPath()) ('StopDial-Explicit-Backup-' + [Guid]::NewGuid().ToString('N'))
+    $overridePreview = & $installer -PackageRoot $package -Vst3Directory $overrideRoot -BackupRoot $overrideBackup -WhatIf
+    Assert-True ($overridePreview.status -eq 'what-if') 'Explicit Vst3Directory override failed without LOCALAPPDATA.'
+    $expectedOverrideTarget = Join-Path $overrideRoot 'StopDial.vst3'
+    Assert-True ([string]::Equals([System.IO.Path]::GetFullPath($overridePreview.target), [System.IO.Path]::GetFullPath($expectedOverrideTarget), [System.StringComparison]::OrdinalIgnoreCase)) 'Explicit Vst3Directory override was not honored without LOCALAPPDATA.'
+    Assert-True (-not (Test-Path -LiteralPath $overrideRoot)) 'Explicit override WhatIf created the VST3 destination.'
+    Assert-True (-not (Test-Path -LiteralPath $overrideBackup)) 'Explicit override WhatIf created the backup directory.'
 }
 finally {
     if ([string]::IsNullOrWhiteSpace($originalLocalAppData)) {
