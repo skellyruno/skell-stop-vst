@@ -5,9 +5,12 @@ StopDial Windows VST3 — safe install and rollback
    StopDial.vst3, release-manifest.json, SHA256SUMS.txt,
    Install-StopDial.ps1, and INSTALL-WINDOWS.txt.
 3. Open PowerShell. The default destination is:
-   C:\Program Files\Common Files\VST3
-   If Windows denies write access, reopen PowerShell as Administrator.
-   The script does not elevate itself, edit the registry, or change DAW settings.
+   %LOCALAPPDATA%\Programs\Common\VST3
+   This is the current Windows user's VST3 folder and does not require
+   administrator privileges. To install machine-wide, explicitly pass
+   -Vst3Directory "$env:CommonProgramFiles\VST3" from a PowerShell session
+   that already has permission; the script never elevates itself.
+   The script does not edit the registry or change DAW settings.
 4. Preview the operation first:
    .\Install-StopDial.ps1 -PackageRoot . -WhatIf
 5. Install or update:

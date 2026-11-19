@@ -8,9 +8,11 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 if ([string]::IsNullOrWhiteSpace($Vst3Directory)) {
-    $commonFiles = $env:CommonProgramFiles
-    if ([string]::IsNullOrWhiteSpace($commonFiles)) { $commonFiles = 'C:\Program Files\Common Files' }
-    $Vst3Directory = Join-Path $commonFiles 'VST3'
+    $localAppData = $env:LOCALAPPDATA
+    if ([string]::IsNullOrWhiteSpace($localAppData)) {
+        throw 'LOCALAPPDATA is required for the default per-user VST3 install path. Pass -Vst3Directory for a custom location.'
+    }
+    $Vst3Directory = Join-Path $localAppData 'Programs\Common\VST3'
 }
 if ([string]::IsNullOrWhiteSpace($BackupRoot)) {
     $localData = $env:LOCALAPPDATA

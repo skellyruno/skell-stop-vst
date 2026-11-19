@@ -69,9 +69,11 @@ values in module metadata and manifests before creating backups or touching the
 installed VST3 bundle. If an
 older StopDial is present, it creates and verifies a timestamped backup before
 replacing the bundle. The default destination is
-`C:\Program Files\Common Files\VST3`; if Windows denies write access,
-run PowerShell as Administrator. The helper does not elevate itself, modify
-the registry or change DAW settings.
+`%LOCALAPPDATA%\Programs\Common\VST3`, the current Windows user's VST3
+folder, so a normal user session does not need elevation. To install
+machine-wide, pass `-Vst3Directory "$env:CommonProgramFiles\VST3"` from a
+PowerShell session that already has write permission. The helper never elevates
+itself, modifies the registry or changes DAW settings.
 
 The install command prints `backup_path` when it replaces an existing version.
 Keep that folder and use its exact path to roll back:

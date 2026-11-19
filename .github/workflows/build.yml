@@ -20,6 +20,7 @@ on:
       - release/stopdial-vst3-only-20261115
       - release/stopdial-vst3-package-guard-20261116
       - release/stopdial-safe-install-rollback-20261117
+      - fix/stopdial-per-user-vst3-default-20261118
 
 permissions:
   contents: read
