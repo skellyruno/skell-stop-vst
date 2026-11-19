@@ -1,5 +1,15 @@
 # StopDial changelog
 
+## Unreleased — Per-user preview install default
+
+- Default the Windows preview install and rollback target to
+  `%LOCALAPPDATA%\Programs\Common\VST3`, avoiding unnecessary elevation.
+- Fail closed with a clear message when `LOCALAPPDATA` is unavailable; retain
+  explicit `-Vst3Directory` for custom or machine-wide destinations.
+- Test the resolved default path with `-WhatIf` and verify missing
+  `LOCALAPPDATA` cannot fall back to a machine-wide directory.
+
+
 ## Unreleased — Strict metadata integrity
 
 - Reject duplicate and case-colliding JSON keys in VST3 module metadata,

@@ -36,6 +36,28 @@ function Get-InstalledVersion {
 $package = [System.IO.Path]::GetFullPath($PackageRoot)
 $installer = Join-Path $package 'Install-StopDial.ps1'
 if (-not (Test-Path -LiteralPath $installer -PathType Leaf)) { throw 'Package is missing Install-StopDial.ps1.' }
+
+$defaultLocalAppData = $env:LOCALAPPDATA
+if ([string]::IsNullOrWhiteSpace($defaultLocalAppData)) { throw 'LOCALAPPDATA must be available for per-user installer tests.' }
+$defaultVst3Target = Join-Path $defaultLocalAppData 'Programs\Common\VST3\StopDial.vst3'
+$defaultPreview = & $installer -PackageRoot $package -WhatIf
+Assert-True ($defaultPreview.status -eq 'what-if') 'Default-path WhatIf did not report what-if.'
+Assert-True ([string]::Equals([System.IO.Path]::GetFullPath($defaultPreview.target), [System.IO.Path]::GetFullPath($defaultVst3Target), [System.StringComparison]::OrdinalIgnoreCase)) 'Default install path is not per-user LOCALAPPDATA Programs\Common\VST3.'
+
+$originalLocalAppData = $env:LOCALAPPDATA
+try {
+    Remove-Item Env:LOCALAPPDATA -ErrorAction SilentlyContinue
+    $missingLocalAppDataError = ''
+    try { & $installer -PackageRoot $package -WhatIf | Out-Null } catch { $missingLocalAppDataError = $_.Exception.Message }
+    Assert-True ($missingLocalAppDataError -like '*LOCALAPPDATA is required for the default per-user VST3 install path*') 'Installer did not fail closed when LOCALAPPDATA is unavailable.'
+}
+finally {
+    if ([string]::IsNullOrWhiteSpace($originalLocalAppData)) {
+        Remove-Item Env:LOCALAPPDATA -ErrorAction SilentlyContinue
+    } else {
+        $env:LOCALAPPDATA = $originalLocalAppData
+    }
+}
 $testRoot = Join-Path ([System.IO.Path]::GetTempPath()) ('StopDial-Install-Test-' + [Guid]::NewGuid().ToString('N'))
 $targetRoot = Join-Path $testRoot 'VST3'
 $backupRoot = Join-Path $testRoot 'Backups'
