@@ -87,14 +87,47 @@ class VerifyVst3Tests(unittest.TestCase):
             with self.assertRaisesRegex(VerificationError, "metadata"):
                 verify_bundle(bundle)
 
-    def test_accepts_steinberg_json5_trailing_commas(self):
+    def test_accepts_steinberg_json5_trailing_commas_and_normalizes_staged_bundle(self):
         with tempfile.TemporaryDirectory() as temp:
             bundle = self.make_bundle(Path(temp))
-            text = json.dumps(json.loads(moduleinfo()), indent=2)
-            text = text.replace("\n  }", ",\n  }").replace("\n  ]", ",\n  ]")
+            metadata = json.loads(moduleinfo())
+            metadata["StringProbe"] = 'literal ,} and "quoted" and \\path'
+            text = json.dumps(metadata, indent=2)
+            text = text.replace("\n    }", ",\n    }").replace("\n  ]", ",\n  ]")
             text = text[:-1] + ",\n}"
-            (bundle / MODULEINFO).write_text(text, encoding="utf-8")
+            moduleinfo_path = bundle / MODULEINFO
+            moduleinfo_path.write_text(text, encoding="utf-8")
+
             self.assertTrue(verify_bundle(bundle)["verified"])
+
+            normalized_text = moduleinfo_path.read_text(encoding="utf-8")
+            normalized = json.loads(normalized_text)
+            self.assertEqual(
+                normalized["StringProbe"],
+                'literal ,} and "quoted" and \\path',
+            )
+            self.assertEqual(
+                normalized_text,
+                json.dumps(normalized, indent=2, ensure_ascii=False) + "\n",
+            )
+
+    def test_zip_rejects_un_normalized_json5_trailing_commas(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            bundle = self.make_bundle(root)
+            moduleinfo_path = bundle / MODULEINFO
+            text = json.dumps(json.loads(moduleinfo()), indent=2)
+            text = text[:-1] + ",\n}"
+            moduleinfo_path.write_text(text, encoding="utf-8")
+
+            archive_path = root / "unnormalized-json5.zip"
+            with zipfile.ZipFile(archive_path, "w") as archive:
+                for item in bundle.rglob("*"):
+                    if item.is_file():
+                        archive.write(item, f"{BUNDLE}/{item.relative_to(bundle).as_posix()}")
+
+            with self.assertRaisesRegex(VerificationError, "strict JSON"):
+                verify_bundle(archive_path)
 
     def test_rejects_duplicate_top_level_metadata_keys(self):
         with tempfile.TemporaryDirectory() as temp:

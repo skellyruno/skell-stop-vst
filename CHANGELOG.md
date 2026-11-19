@@ -1,5 +1,10 @@
 # StopDial changelog
 
+## Unreleased — Strict JSON VST3 package metadata
+
+- Normalize Steinberg JSON5 trailing commas in the staged `moduleinfo.json` before checksums are generated; ZIP verification rejects unnormalized JSON5 so distributed bundles contain strict RFC 8259 JSON.
+- Add regressions for string contents containing `,}`, escaped quotes/backslashes, and rejection of unnormalized JSON5 archives.
+
 ## Unreleased — Per-user preview install default
 
 - Default the Windows preview install and rollback target to

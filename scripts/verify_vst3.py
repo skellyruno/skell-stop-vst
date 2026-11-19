@@ -113,17 +113,24 @@ def _strip_steinberg_json5_trailing_commas(source: str) -> str:
     return "".join(output)
 
 
-def _validate_moduleinfo(raw: bytes) -> tuple[str, str]:
+def _validate_moduleinfo(
+    raw: bytes,
+    *,
+    allow_trailing_commas: bool,
+) -> tuple[str, str, str]:
     try:
         source = raw.decode("utf-8-sig")
+        if allow_trailing_commas:
+            source = _strip_steinberg_json5_trailing_commas(source)
         info = json.loads(
-            _strip_steinberg_json5_trailing_commas(source),
+            source,
             object_pairs_hook=_reject_duplicate_object_keys,
             parse_constant=_reject_nonfinite_constant,
             parse_float=_parse_finite_float,
         )
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-        raise VerificationError(f"moduleinfo.json is not valid UTF-8/Steinberg JSON5 metadata: {exc}") from exc
+        mode = "Steinberg JSON5" if allow_trailing_commas else "strict JSON"
+        raise VerificationError(f"moduleinfo.json is not valid UTF-8/{mode} metadata: {exc}") from exc
     if not isinstance(info, dict):
         raise VerificationError("moduleinfo.json root must be a JSON object")
 
@@ -150,8 +157,8 @@ def _validate_moduleinfo(raw: bytes) -> tuple[str, str]:
     class_id = _field(audio_classes[0], "CID", "cid")
     if not isinstance(class_id, str) or not class_id.strip():
         raise VerificationError("StopDial Audio Module Class is missing its CID")
-    return version, class_id
-
+    normalized = json.dumps(info, indent=2, ensure_ascii=False) + "\n"
+    return version, class_id, normalized
 
 def _check_relative_name(name: str) -> str:
     normalized = name.replace("\\", "/")
@@ -163,7 +170,11 @@ def _check_relative_name(name: str) -> str:
     return normalized
 
 
-def _validate_entries(entries: dict[str, bytes]) -> dict[str, Any]:
+def _validate_entries(
+    entries: dict[str, bytes],
+    *,
+    allow_trailing_commas: bool,
+) -> tuple[dict[str, Any], str]:
     if not entries:
         raise VerificationError("VST3 package is empty")
 
@@ -196,10 +207,13 @@ def _validate_entries(entries: dict[str, bytes]) -> dict[str, Any]:
             f"Expected exactly one Windows VST3 module binary, found {sorted(module_files)!r}"
         )
 
-    version, class_id = _validate_moduleinfo(entries[moduleinfo_name])
+    version, class_id, normalized_moduleinfo = _validate_moduleinfo(
+        entries[moduleinfo_name],
+        allow_trailing_commas=allow_trailing_commas,
+    )
     binary = entries[binary_name]
     _validate_pe32_plus_amd64(binary)
-    return {
+    manifest = {
         "product": PRODUCT_NAME,
         "format": "VST3",
         "platform": "windows-x64",
@@ -211,7 +225,7 @@ def _validate_entries(entries: dict[str, bytes]) -> dict[str, Any]:
         "binary_sha256": hashlib.sha256(binary).hexdigest(),
         "verified": True,
     }
-
+    return manifest, normalized_moduleinfo
 
 def verify_bundle(path: Path) -> dict[str, Any]:
     if path.is_file() and zipfile.is_zipfile(path):
@@ -233,7 +247,8 @@ def verify_bundle(path: Path) -> dict[str, Any]:
                     entries[name] = archive.read(item)
         except zipfile.BadZipFile as exc:
             raise VerificationError(f"Invalid ZIP archive: {exc}") from exc
-        return _validate_entries(entries)
+        manifest, _ = _validate_entries(entries, allow_trailing_commas=False)
+        return manifest
 
     if not path.is_dir() or path.name != BUNDLE_NAME:
         raise VerificationError(f"Input must be a {BUNDLE_NAME} directory or a ZIP containing it")
@@ -251,7 +266,12 @@ def verify_bundle(path: Path) -> dict[str, Any]:
             raise VerificationError(f"Duplicate or case-colliding bundle path: {relative}")
         seen.add(key)
         entries[f"{BUNDLE_NAME}/{relative}"] = item.read_bytes()
-    return _validate_entries(entries)
+    manifest, normalized_moduleinfo = _validate_entries(entries, allow_trailing_commas=True)
+    moduleinfo_path = path / MODULEINFO_PATH
+    normalized_bytes = normalized_moduleinfo.encode("utf-8")
+    if moduleinfo_path.read_bytes() != normalized_bytes:
+        moduleinfo_path.write_text(normalized_moduleinfo, encoding="utf-8", newline="\n")
+    return manifest
 
 
 def main(argv: list[str] | None = None) -> int:
