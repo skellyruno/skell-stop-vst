@@ -3,10 +3,7 @@ name: Build StopDial
 on:
   workflow_dispatch:
   pull_request:
-    branches:
-      - main
-      - release/stopdial-vst3-only-20261115
-      - release/stopdial-vst3-package-guard-20261116
+    # Release PRs are intentionally stacked; path filters are sufficient.
     paths:
       - "README.md"
       - "CHANGELOG.md"
