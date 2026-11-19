@@ -96,6 +96,52 @@ class VerifyVst3Tests(unittest.TestCase):
             (bundle / MODULEINFO).write_text(text, encoding="utf-8")
             self.assertTrue(verify_bundle(bundle)["verified"])
 
+    def test_rejects_duplicate_top_level_metadata_keys(self):
+        with tempfile.TemporaryDirectory() as temp:
+            bundle = self.make_bundle(Path(temp))
+            raw = moduleinfo().decode("utf-8")
+            raw = raw.replace('"Name": "StopDial",', '"Name": "StopDial", "Name": "StopDial",', 1)
+            (bundle / MODULEINFO).write_text(raw, encoding="utf-8")
+            with self.assertRaisesRegex(VerificationError, "Duplicate"):
+                verify_bundle(bundle)
+
+    def test_rejects_duplicate_nested_metadata_keys(self):
+        with tempfile.TemporaryDirectory() as temp:
+            bundle = self.make_bundle(Path(temp))
+            raw = moduleinfo().decode("utf-8")
+            raw = raw.replace('"Category": "Audio Module Class",', '"Category": "Audio Module Class", "Category": "Audio Module Class",', 1)
+            (bundle / MODULEINFO).write_text(raw, encoding="utf-8")
+            with self.assertRaisesRegex(VerificationError, "Duplicate"):
+                verify_bundle(bundle)
+
+    def test_rejects_case_colliding_metadata_keys(self):
+        with tempfile.TemporaryDirectory() as temp:
+            bundle = self.make_bundle(Path(temp))
+            raw = moduleinfo().decode("utf-8")
+            raw = raw.replace('"Name": "StopDial",', '"Name": "StopDial", "name": "StopDial",', 1)
+            (bundle / MODULEINFO).write_text(raw, encoding="utf-8")
+            with self.assertRaisesRegex(VerificationError, "case-colliding"):
+                verify_bundle(bundle)
+
+    def test_rejects_nonfinite_json_constants(self):
+        for token in ("NaN", "Infinity", "-Infinity"):
+            with self.subTest(token=token), tempfile.TemporaryDirectory() as temp:
+                bundle = self.make_bundle(Path(temp))
+                raw = moduleinfo().decode("utf-8")
+                raw = raw[:-1] + f', "NumericProbe": {token}}}'
+                (bundle / MODULEINFO).write_text(raw, encoding="utf-8")
+                with self.assertRaisesRegex(VerificationError, "non-finite"):
+                    verify_bundle(bundle)
+
+    def test_rejects_exponent_overflow(self):
+        with tempfile.TemporaryDirectory() as temp:
+            bundle = self.make_bundle(Path(temp))
+            raw = moduleinfo().decode("utf-8")
+            raw = raw[:-1] + ', "NumericProbe": 1e999}'
+            (bundle / MODULEINFO).write_text(raw, encoding="utf-8")
+            with self.assertRaisesRegex(VerificationError, "overflows"):
+                verify_bundle(bundle)
+
     def test_rejects_malformed_steinberg_json5_metadata(self):
         with tempfile.TemporaryDirectory() as temp:
             bundle = self.make_bundle(Path(temp))

@@ -48,10 +48,42 @@ Usual outputs:
 
 The location can differ across JUCE generators; the release workflow requires
 exactly one `StopDial.vst3` bundle and verifies its PE32+ AMD64 module before
-upload. The Actions artifact `StopDial-Windows-x64-VST3` contains the bundle at
-the artifact root plus `release-manifest.json`; there is no nested product ZIP
-or Standalone executable. Copy the `StopDial.vst3` directory to
-`C:\Program Files\Common Files\VST3` on Windows.
+upload. The Actions artifact `StopDial-Windows-x64-VST3` contains the bundle,
+`release-manifest.json`, `SHA256SUMS.txt`, `Install-StopDial.ps1` and
+`INSTALL-WINDOWS.txt`; there is no nested product ZIP or Standalone executable.
+
+## Safe Windows installation and rollback
+
+Close FL Studio or any other DAW before replacing a loaded plugin. Extract the
+complete artifact ZIP and keep its files together. Preview first, then install:
+
+```powershell
+.\Install-StopDial.ps1 -PackageRoot . -WhatIf
+.\Install-StopDial.ps1 -PackageRoot .
+```
+
+The helper verifies the package checksum list, release manifest, StopDial
+processor/controller metadata, AMD64 PE32+ module and bundle contents.
+It rejects duplicate or case-colliding JSON properties and non-finite numeric
+values in module metadata and manifests before creating backups or touching the
+installed VST3 bundle. If an
+older StopDial is present, it creates and verifies a timestamped backup before
+replacing the bundle. The default destination is
+`C:\Program Files\Common Files\VST3`; if Windows denies write access,
+run PowerShell as Administrator. The helper does not elevate itself, modify
+the registry or change DAW settings.
+
+The install command prints `backup_path` when it replaces an existing version.
+Keep that folder and use its exact path to roll back:
+
+```powershell
+.\Install-StopDial.ps1 -RollbackFrom "C:\Users\you\AppData\Local\Skelly\StopDial\Backups\StopDial-..."
+```
+
+Rollback backs up the currently installed bundle before restoring the selected
+backup. This is a preview install utility, not a signed commercial installer or
+an automatic updater. FL Studio compatibility and audio acceptance remain
+separate release gates.
 
 ## Controls
 

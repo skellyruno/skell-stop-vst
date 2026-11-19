@@ -1,0 +1,30 @@
+StopDial Windows VST3 — safe install and rollback
+
+1. Close FL Studio and any other DAW that may have StopDial loaded.
+2. Extract the complete artifact ZIP to a normal folder. Keep these files together:
+   StopDial.vst3, release-manifest.json, SHA256SUMS.txt,
+   Install-StopDial.ps1, and INSTALL-WINDOWS.txt.
+3. Open PowerShell. The default destination is:
+   C:\Program Files\Common Files\VST3
+   If Windows denies write access, reopen PowerShell as Administrator.
+   The script does not elevate itself, edit the registry, or change DAW settings.
+4. Preview the operation first:
+   .\Install-StopDial.ps1 -PackageRoot . -WhatIf
+5. Install or update:
+   .\Install-StopDial.ps1 -PackageRoot .
+   The helper validates the manifest, all package checksums, VST3 metadata,
+   the AMD64 PE32+ module, and the bundle contents. If an older StopDial
+   exists, it creates and verifies a timestamped backup before replacement.
+6. The command prints a backup_path when an existing version was replaced.
+   Keep that folder; it contains the prior StopDial.vst3 and backup-manifest.json.
+7. To roll back, use the exact backup_path printed by the install command:
+   .\Install-StopDial.ps1 -RollbackFrom "C:\Users\you\AppData\Local\Skelly\StopDial\Backups\StopDial-..."
+   Rollback first backs up the currently installed version, then restores and
+   verifies the selected backup. No backup is silently overwritten.
+
+For a custom VST3 directory, pass -Vst3Directory "D:\Audio\VST3".
+Do not delete old backups until the restored plugin has been checked in your DAW.
+
+This helper is a preview install utility, not a signed commercial installer or
+an automatic updater. FL Studio compatibility and audio acceptance remain
+separate release gates.

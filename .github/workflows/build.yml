@@ -3,10 +3,11 @@ name: Build StopDial
 on:
   workflow_dispatch:
   pull_request:
-    branches:
-      - main
-      - release/stopdial-vst3-only-20261115
+    # Release PRs are intentionally stacked; path filters are sufficient.
     paths:
+      - "README.md"
+      - "CHANGELOG.md"
+      - "INSTALL-WINDOWS.txt"
       - "CMakeLists.txt"
       - ".github/workflows/build.yml"
       - "scripts/**"
@@ -18,6 +19,7 @@ on:
       - master
       - release/stopdial-vst3-only-20261115
       - release/stopdial-vst3-package-guard-20261116
+      - release/stopdial-safe-install-rollback-20261117
 
 permissions:
   contents: read
@@ -77,6 +79,22 @@ jobs:
           if ($LASTEXITCODE -ne 0) {
             throw "StopDial Windows VST3 package verification failed"
           }
+      - name: Add safe Windows install and rollback helper
+        shell: pwsh
+        run: |
+          Copy-Item -LiteralPath scripts/Install-StopDial.ps1 -Destination package/Install-StopDial.ps1
+          Copy-Item -LiteralPath INSTALL-WINDOWS.txt -Destination package/INSTALL-WINDOWS.txt
+          $packageRoot = Join-Path $PWD "package"
+          $files = @(Get-ChildItem -LiteralPath $packageRoot -Recurse -File | Sort-Object FullName)
+          $lines = foreach ($file in $files) {
+            $relative = $file.FullName.Substring($packageRoot.Length).TrimStart([char[]]@('\','/')).Replace('\','/')
+            $hash = (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+            "$hash  $relative"
+          }
+          Set-Content -LiteralPath (Join-Path $packageRoot "SHA256SUMS.txt") -Value $lines -Encoding ascii
+      - name: Test safe install, update and rollback helper
+        shell: pwsh
+        run: ./scripts/Test-Install-StopDial.ps1 -PackageRoot package
       - name: Validate packaged VST3 with pluginval
         uses: Tracktion/pluginval/validate@v2.0.0-beta3
         with:
@@ -90,11 +108,11 @@ jobs:
           name: StopDial-UI-Windows
           path: build/StopDial-*.png
           if-no-files-found: ignore
-          retention-days: 7
+          retention-days: 30
       - name: Upload installable VST3 bundle and provenance manifest
         uses: actions/upload-artifact@v4
         with:
           name: StopDial-Windows-x64-VST3
           path: package/
           if-no-files-found: error
-          retention-days: 7
+          retention-days: 30
