@@ -8,12 +8,18 @@ WORKFLOW_PATH = ROOT / ".github" / "workflows" / "build.yml"
 
 
 def _step_block(workflow: str, name: str) -> str:
-    marker = f"      - name: {name}\\n"
-    start = workflow.find(marker)
-    if start < 0:
+    lines = workflow.splitlines()
+    marker = f"      - name: {name}"
+    try:
+        start = lines.index(marker)
+    except ValueError:
         return ""
-    next_step = workflow.find("\\n      - name: ", start + len(marker))
-    return workflow[start:] if next_step < 0 else workflow[start:next_step]
+    end = next(
+        (index for index in range(start + 1, len(lines))
+         if lines[index].startswith("      - name: ")),
+        len(lines),
+    )
+    return chr(10).join(lines[start:end])
 
 
 class ReleaseWorkflowPolicyTests(unittest.TestCase):
