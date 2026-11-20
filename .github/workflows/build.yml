@@ -57,7 +57,7 @@ jobs:
       - name: Run JUCE DSP and host regression tests
         run: ctest --test-dir build -C Release --output-on-failure
       - name: Test fail-closed package verifier
-        run: python -m unittest discover -s tests -p "test_verify_vst3.py" -v
+        run: python -m unittest discover -s tests -p "test_*.py" -v
       - name: Stage and verify one Windows VST3 bundle
         shell: pwsh
         run: |
@@ -110,7 +110,12 @@ jobs:
           path: build/StopDial-*.png
           if-no-files-found: ignore
           retention-days: 30
+      - name: Explain public-repository artifact withholding
+        if: ${{ github.event.repository.private != true }}
+        run: |
+          Write-Output "::notice::Installable StopDial VST3 preview upload is withheld because this repository is public. Build, package verification, installer tests and pluginval still run; no product artifact is published from this run."
       - name: Upload installable VST3 bundle and provenance manifest
+        if: ${{ github.event.repository.private == true }}
         uses: actions/upload-artifact@v4
         with:
           name: StopDial-Windows-x64-VST3

@@ -1,5 +1,10 @@
 # StopDial changelog
 
+## Unreleased — Withhold installable previews from public repositories
+
+- Keep build, package verification, installer tests and pluginval active, but upload the installable Windows VST3 preview artifact only when the repository is private.
+- Public-repository runs emit an explicit notice and retain only the separate UI diagnostic artifact; existing public artifacts are not deleted or changed.
+
 ## Unreleased — Strict JSON VST3 package metadata
 
 - Normalize Steinberg JSON5 trailing commas in the staged `moduleinfo.json` before checksums are generated; ZIP verification rejects unnormalized JSON5 so distributed bundles contain strict RFC 8259 JSON.
